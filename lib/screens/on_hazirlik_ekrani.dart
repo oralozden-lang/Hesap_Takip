@@ -3819,7 +3819,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         _posOkunuyor = false;
         _posOkundu = true;
         _posKontrolOnaylandi = false;
-        _okumaMesaji = '✓ \${poslar.length} adet POS okundu · $kullanilanApi';
+        _okumaMesaji = '✓ POS verileri okundu · $kullanilanApi';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
       });

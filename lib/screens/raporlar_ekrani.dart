@@ -469,6 +469,10 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                   ),
                 if (detayAcik || onDetayToggle == null) ...[
                   _satirOzet('Harcamalar', harcama, Colors.orange[700]!),
+                  if (_topla(kayitlar, 'toplamHarcama') > 0)
+                    _satirOzet('  Kasa Harcamaları', _topla(kayitlar, 'toplamHarcama'), Colors.orange[400]!),
+                  if (anaKasaHarcama > 0)
+                    _satirOzet('  Ana Kasa Harcamaları', anaKasaHarcama, Colors.orange[400]!),
                   if (nakitCikisTL > 0)
                     _satirOzet(
                         'Nakit Çıkış (TL)', nakitCikisTL, Colors.purple[700]!),
