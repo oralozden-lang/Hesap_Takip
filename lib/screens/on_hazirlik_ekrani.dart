@@ -12,6 +12,7 @@ import 'package:printing/printing.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as xl;
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:ui' as ui;
 import 'dart:js' as js;
@@ -2900,12 +2901,71 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     );
   }
 
+  // ── Resim seç + kırp (kamera veya galeri) ────────────────────────────────
+  // Kamera: ImagePicker → kırpma ekranı
+  // Galeri: FilePicker (direkt galeri, Android seçici çıkmaz) → kırpma ekranı
+  Future<Uint8List?> _resimSecVeKirp({
+    required ImageSource source,
+    int imageQuality = 60,
+    double maxWidth = 1200,
+    double maxHeight = 1600,
+  }) async {
+    String? yol;
+
+    if (source == ImageSource.camera) {
+      // Kamera: ImagePicker kullan
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: imageQuality,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+      );
+      if (picked == null) return null;
+      yol = picked.path;
+    } else {
+      // Galeri: FilePicker kullan — direkt galeriyi açar, Android seçici çıkmaz
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return null;
+      yol = result.files.single.path;
+      if (yol == null) return null;
+    }
+
+    // Kırpma ekranı
+    final kirpilan = await ImageCropper().cropImage(
+      sourcePath: yol,
+      compressQuality: imageQuality,
+      uiSettings: [
+        AndroidUiSettings(
+          toolbarTitle: 'Görüntüyü Kırp',
+          toolbarColor: const Color(0xFF0288D1),
+          toolbarWidgetColor: Colors.white,
+          activeControlsWidgetColor: const Color(0xFF0288D1),
+          lockAspectRatio: false,
+          hideBottomControls: false,
+        ),
+        IOSUiSettings(
+          title: 'Görüntüyü Kırp',
+          cancelButtonTitle: 'İptal',
+          doneButtonTitle: 'Tamam',
+        ),
+      ],
+    );
+
+    if (kirpilan == null) return null;
+    return await kirpilan.readAsBytes();
+  }
+
   // ── Görsel Okuma Fallback Zinciri ────────────────────────────────────────
   // 1. Gemini 3.1 Flash Lite Preview
-  // 2. Gemini 2.5 Flash Lite
+  // 2. Gemini 2.5 Flash
   // 3. Groq (llama-4-scout-17b-16e-instruct)
   // Başarılı olan ilk servisten sonuç döner, hepsi başarısızsa null döner
-  Future<String?> _gorselOkuFallback({
+  // Dönüş: {'metin': String, 'api': String} veya null
+  Future<Map<String, String>?> _gorselOkuFallback({
     required String base64Image,
     required String mimeType,
     required String prompt,
@@ -2914,20 +2974,20 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
   }) async {
     // Gemini modelleri
     final geminiModeller = [
-      'gemini-3.1-flash-lite-preview', // hızlı, önce dene
-      'gemini-2.5-flash', // güçlü, yedek
+      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
+      {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5'},
     ];
 
-    for (final model in geminiModeller) {
+    for (final entry in geminiModeller) {
       try {
         final result = await _geminiOku(
           base64Image: base64Image,
           mimeType: mimeType,
           prompt: prompt,
           apiKey: geminiApiKey,
-          model: model,
+          model: entry['model']!,
         );
-        if (result != null) return result;
+        if (result != null) return {'metin': result, 'api': entry['label']!};
       } catch (_) {}
     }
 
@@ -2940,7 +3000,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           prompt: prompt,
           apiKey: groqApiKey,
         );
-        if (result != null) return result;
+        if (result != null) return {'metin': result, 'api': 'Groq (Llama 4)'};
       } catch (_) {}
     }
 
@@ -3097,20 +3157,18 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         return;
       }
 
-      // Resim seç — lifecycle uyarısını geçici devre dışı bırak
+      // Resim seç + kırp — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
+      final bytes = await _resimSecVeKirp(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
         maxHeight: 1600,
       );
       _gorselSeciliyor = false;
-      if (picked == null) return;
+      if (bytes == null) return;
 
       // Önizleme — net mi kontrolü
-      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(
         context,
@@ -3133,7 +3191,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
 
       // Resmi base64'e çevir
       final base64Image = base64Encode(bytes);
-      final mimeType = picked.mimeType ?? 'image/jpeg';
+      const mimeType = 'image/jpeg';
 
       // Tüm ödeme yöntemlerini Firestore'dan al
       final tumOdemeSnap = await FirebaseFirestore.instance
@@ -3402,9 +3460,9 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         return;
       }
 
-      // Fallback zinciri: 3.1 → 2.5-lite → Groq
+      // Fallback zinciri: 3.1 → 2.5 → Groq
       final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
-      final String? responseText = await _gorselOkuFallback(
+      final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
         prompt: prompt,
@@ -3412,7 +3470,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         groqApiKey: groqApiKey,
       );
 
-      if (responseText == null) {
+      if (fallbackSonuc == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -3427,6 +3485,8 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         setState(() => _pulseOkunuyor = false);
         return;
       }
+      final responseText = fallbackSonuc['metin']!;
+      final kullanilanApi = fallbackSonuc['api']!;
 
       // JSON parse
       final cleanText =
@@ -3631,7 +3691,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         _pulseOkunuyor = false;
         _pulseOkundu = true;
         _pulseKontrolOnaylandi = false; // Yeni okumada onay sıfırla
-        _okumaMesaji = '✓ Pulse verileri okundu';
+        _okumaMesaji = '✓ Pulse okundu · $kullanilanApi ile';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
       });
@@ -3675,17 +3735,15 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       }
 
       _gorselSeciliyor = true;
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
+      final bytes = await _resimSecVeKirp(
         source: source,
         imageQuality: 60,
         maxWidth: 1600,
         maxHeight: 2000,
       );
       _gorselSeciliyor = false;
-      if (picked == null) return;
+      if (bytes == null) return;
 
-      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(context, bytes, 'POS Fişleri Önizleme');
       if (!gonder) return;
@@ -3702,7 +3760,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       if (!mounted) return;
 
       final base64Image = base64Encode(bytes);
-      final mimeType = picked.mimeType ?? 'image/jpeg';
+      const mimeType = 'image/jpeg';
 
       const prompt = """Bu fotoğrafta POS günsonu fişleri ve/veya Z raporu var.
 ÖNCE kontrol et:
@@ -3727,7 +3785,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
       }
 
       final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
-      final String? responseText = await _gorselOkuFallback(
+      final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
         prompt: prompt,
@@ -3735,7 +3793,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         groqApiKey: groqApiKey,
       );
 
-      if (responseText == null) {
+      if (fallbackSonuc == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -3749,6 +3807,8 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         setState(() => _posOkunuyor = false);
         return;
       }
+      final responseText = fallbackSonuc['metin']!;
+      final kullanilanApi = fallbackSonuc['api']!;
 
       final cleanText =
           responseText.replaceAll(RegExp(r'```json|```'), '').trim();
@@ -3816,7 +3876,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         _posOkunuyor = false;
         _posOkundu = true;
         _posKontrolOnaylandi = false;
-        _okumaMesaji = '✓ \${poslar.length} adet POS okundu';
+        _okumaMesaji = '✓ ${poslar.length} adet POS okundu · $kullanilanApi ile';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
       });
@@ -3861,20 +3921,18 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         return;
       }
 
-      // Resim seç — lifecycle uyarısını geçici devre dışı bırak
+      // Resim seç + kırp — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
+      final bytes = await _resimSecVeKirp(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
         maxHeight: 1600,
       );
       _gorselSeciliyor = false;
-      if (picked == null) return;
+      if (bytes == null) return;
 
       // Önizleme — net mi kontrolü
-      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(context, bytes, 'My Dominos Önizleme');
       if (!gonder) return; // Kullanıcı yeniden çek dedi
@@ -3894,7 +3952,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
 
       // Resmi base64'e çevir
       final base64Image = base64Encode(bytes);
-      final mimeType = picked.mimeType ?? 'image/jpeg';
+      const mimeType = 'image/jpeg';
 
       // Online ödeme listesini Firestore'dan al — digerEkranAdi ile eşleştirme
       final onlineSnap = await FirebaseFirestore.instance
@@ -4022,9 +4080,9 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         return;
       }
 
-      // Fallback zinciri: 3.1 → 2.5-lite → Groq
+      // Fallback zinciri: 3.1 → 2.5 → Groq
       final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
-      final String? responseText = await _gorselOkuFallback(
+      final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
         prompt: prompt,
@@ -4034,7 +4092,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
 
       setState(() => _myDominosOkunuyor = false);
 
-      if (responseText == null) {
+      if (fallbackSonuc == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -4048,6 +4106,8 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         }
         return;
       }
+      final responseText = fallbackSonuc['metin']!;
+      final kullanilanApi = fallbackSonuc['api']!;
 
       final cleanText =
           responseText.replaceAll(RegExp(r'```json|```'), '').trim();
@@ -4120,7 +4180,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         _myDominosOkunan = yeniOkunan;
         _myDominosYuklendi = true;
         _myDomOkundu = true;
-        _okumaMesaji = '✓ My Dominos verileri okundu';
+        _okumaMesaji = '✓ My Dominos okundu · $kullanilanApi ile';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
         for (final entry in yeniOkunan.entries) {
