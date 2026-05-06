@@ -18,7 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 1811e3d
+          ref: main
+          fetch-depth: 0
+      - run: git checkout 1811e3d -- .
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.29.0'
