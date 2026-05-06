@@ -12,7 +12,6 @@ import 'package:printing/printing.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart' as xl;
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:ui' as ui;
 import 'dart:js' as js;
@@ -2901,19 +2900,14 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     );
   }
 
-  // ── Resim seç + kırp (kamera veya galeri) ────────────────────────────────
-  // Kamera: ImagePicker → kırpma ekranı
-  // Galeri: FilePicker (direkt galeri, Android seçici çıkmaz) → kırpma ekranı
-  Future<Uint8List?> _resimSecVeKirp({
+  // ── Resim seç: kamera → ImagePicker, galeri → FilePicker (direkt galeri) ──
+  Future<Uint8List?> _resimSec({
     required ImageSource source,
     int imageQuality = 60,
     double maxWidth = 1200,
     double maxHeight = 1600,
   }) async {
-    String? yol;
-
     if (source == ImageSource.camera) {
-      // Kamera: ImagePicker kullan
       final picker = ImagePicker();
       final picked = await picker.pickImage(
         source: ImageSource.camera,
@@ -2922,41 +2916,23 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         maxHeight: maxHeight,
       );
       if (picked == null) return null;
-      yol = picked.path;
+      return await picked.readAsBytes();
     } else {
-      // Galeri: FilePicker kullan — direkt galeriyi açar, Android seçici çıkmaz
+      // FilePicker → direkt galeriyi açar, Android "İşlem seçin" çıkmaz
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
+        withData: true, // Web'de bytes direkt gelir
       );
       if (result == null || result.files.isEmpty) return null;
-      yol = result.files.single.path;
-      if (yol == null) return null;
+      // Web: bytes direkt, mobil: path üzerinden oku
+      if (result.files.single.bytes != null) {
+        return result.files.single.bytes;
+      }
+      final path = result.files.single.path;
+      if (path == null) return null;
+      return await XFile(path).readAsBytes();
     }
-
-    // Kırpma ekranı
-    final kirpilan = await ImageCropper().cropImage(
-      sourcePath: yol,
-      compressQuality: imageQuality,
-      uiSettings: [
-        AndroidUiSettings(
-          toolbarTitle: 'Görüntüyü Kırp',
-          toolbarColor: const Color(0xFF0288D1),
-          toolbarWidgetColor: Colors.white,
-          activeControlsWidgetColor: const Color(0xFF0288D1),
-          lockAspectRatio: false,
-          hideBottomControls: false,
-        ),
-        IOSUiSettings(
-          title: 'Görüntüyü Kırp',
-          cancelButtonTitle: 'İptal',
-          doneButtonTitle: 'Tamam',
-        ),
-      ],
-    );
-
-    if (kirpilan == null) return null;
-    return await kirpilan.readAsBytes();
   }
 
   // ── Görsel Okuma Fallback Zinciri ────────────────────────────────────────
@@ -2972,7 +2948,6 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String geminiApiKey,
     required String groqApiKey,
   }) async {
-    // Gemini modelleri
     final geminiModeller = [
       {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
       {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5'},
@@ -3157,9 +3132,9 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         return;
       }
 
-      // Resim seç + kırp — lifecycle uyarısını geçici devre dışı bırak
+      // Resim seç — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final bytes = await _resimSecVeKirp(
+      final bytes = await _resimSec(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
@@ -3735,7 +3710,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       }
 
       _gorselSeciliyor = true;
-      final bytes = await _resimSecVeKirp(
+      final bytes = await _resimSec(
         source: source,
         imageQuality: 60,
         maxWidth: 1600,
@@ -3921,9 +3896,9 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         return;
       }
 
-      // Resim seç + kırp — lifecycle uyarısını geçici devre dışı bırak
+      // Resim seç — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final bytes = await _resimSecVeKirp(
+      final bytes = await _resimSec(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
