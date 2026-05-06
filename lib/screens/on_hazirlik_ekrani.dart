@@ -2900,44 +2900,9 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     );
   }
 
-  // ── Resim seç: kamera → ImagePicker, galeri → FilePicker (direkt galeri) ──
-  Future<Uint8List?> _resimSec({
-    required ImageSource source,
-    int imageQuality = 60,
-    double maxWidth = 1200,
-    double maxHeight = 1600,
-  }) async {
-    if (source == ImageSource.camera) {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(
-        source: ImageSource.camera,
-        imageQuality: imageQuality,
-        maxWidth: maxWidth,
-        maxHeight: maxHeight,
-      );
-      if (picked == null) return null;
-      return await picked.readAsBytes();
-    } else {
-      // FilePicker → direkt galeriyi açar, Android "İşlem seçin" çıkmaz
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: true, // Web'de bytes direkt gelir
-      );
-      if (result == null || result.files.isEmpty) return null;
-      // Web: bytes direkt, mobil: path üzerinden oku
-      if (result.files.single.bytes != null) {
-        return result.files.single.bytes;
-      }
-      final path = result.files.single.path;
-      if (path == null) return null;
-      return await XFile(path).readAsBytes();
-    }
-  }
-
   // ── Görsel Okuma Fallback Zinciri ────────────────────────────────────────
   // 1. Gemini 3.1 Flash Lite Preview
-  // 2. Gemini 2.5 Flash
+  // 2. Gemini 2.5 Flash Lite
   // 3. Groq (llama-4-scout-17b-16e-instruct)
   // Başarılı olan ilk servisten sonuç döner, hepsi başarısızsa null döner
   // Dönüş: {'metin': String, 'api': String} veya null
@@ -2966,7 +2931,6 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
       } catch (_) {}
     }
 
-    // Groq fallback
     if (groqApiKey.isNotEmpty) {
       try {
         final result = await _groqOku(
@@ -3134,16 +3098,18 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
 
       // Resim seç — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final bytes = await _resimSec(
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
         maxHeight: 1600,
       );
       _gorselSeciliyor = false;
-      if (bytes == null) return;
+      if (picked == null) return;
 
       // Önizleme — net mi kontrolü
+      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(
         context,
@@ -3166,7 +3132,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
 
       // Resmi base64'e çevir
       final base64Image = base64Encode(bytes);
-      const mimeType = 'image/jpeg';
+      final mimeType = picked.mimeType ?? 'image/jpeg';
 
       // Tüm ödeme yöntemlerini Firestore'dan al
       final tumOdemeSnap = await FirebaseFirestore.instance
@@ -3666,7 +3632,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         _pulseOkunuyor = false;
         _pulseOkundu = true;
         _pulseKontrolOnaylandi = false; // Yeni okumada onay sıfırla
-        _okumaMesaji = '✓ Pulse okundu · $kullanilanApi ile';
+        _okumaMesaji = '✓ Pulse verileri okundu · $kullanilanApi';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
       });
@@ -3710,15 +3676,17 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       }
 
       _gorselSeciliyor = true;
-      final bytes = await _resimSec(
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
         source: source,
         imageQuality: 60,
         maxWidth: 1600,
         maxHeight: 2000,
       );
       _gorselSeciliyor = false;
-      if (bytes == null) return;
+      if (picked == null) return;
 
+      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(context, bytes, 'POS Fişleri Önizleme');
       if (!gonder) return;
@@ -3735,7 +3703,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       if (!mounted) return;
 
       final base64Image = base64Encode(bytes);
-      const mimeType = 'image/jpeg';
+      final mimeType = picked.mimeType ?? 'image/jpeg';
 
       const prompt = """Bu fotoğrafta POS günsonu fişleri ve/veya Z raporu var.
 ÖNCE kontrol et:
@@ -3851,7 +3819,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         _posOkunuyor = false;
         _posOkundu = true;
         _posKontrolOnaylandi = false;
-        _okumaMesaji = '✓ ${poslar.length} adet POS okundu · $kullanilanApi ile';
+        _okumaMesaji = '✓ \${poslar.length} adet POS okundu · $kullanilanApi';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
       });
@@ -3898,16 +3866,18 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
 
       // Resim seç — lifecycle uyarısını geçici devre dışı bırak
       _gorselSeciliyor = true;
-      final bytes = await _resimSec(
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
         source: source,
         imageQuality: 60,
         maxWidth: 1200,
         maxHeight: 1600,
       );
       _gorselSeciliyor = false;
-      if (bytes == null) return;
+      if (picked == null) return;
 
       // Önizleme — net mi kontrolü
+      final bytes = await picked.readAsBytes();
       if (!mounted) return;
       final gonder = await _resimOnizle(context, bytes, 'My Dominos Önizleme');
       if (!gonder) return; // Kullanıcı yeniden çek dedi
@@ -3927,7 +3897,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
 
       // Resmi base64'e çevir
       final base64Image = base64Encode(bytes);
-      const mimeType = 'image/jpeg';
+      final mimeType = picked.mimeType ?? 'image/jpeg';
 
       // Online ödeme listesini Firestore'dan al — digerEkranAdi ile eşleştirme
       final onlineSnap = await FirebaseFirestore.instance
@@ -4155,7 +4125,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         _myDominosOkunan = yeniOkunan;
         _myDominosYuklendi = true;
         _myDomOkundu = true;
-        _okumaMesaji = '✓ My Dominos okundu · $kullanilanApi ile';
+        _okumaMesaji = '✓ My Dominos verileri okundu · $kullanilanApi';
         _degisiklikVar = true;
         if (_duzenlemeAcik) _gercekDegisiklikVar = true;
         for (final entry in yeniOkunan.entries) {
