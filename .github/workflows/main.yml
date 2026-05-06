@@ -2,51 +2,32 @@ name: Deploy Flutter Web
 
 on:
   push:
-    branches: [ main, v1.2.0-dev ]
+      branches: [ main ]
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+      permissions:
+        contents: read
+          pages: write
+            id-token: write
 
-jobs:
-  # V1.9 - main branch → GitHub Pages (değişmez)
-  deploy-production:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.0'
-          channel: 'stable'
-      - run: flutter pub get
-      - run: flutter build web --release --base-href="/ilk_uygulama/"
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: build/web
-      - uses: actions/deploy-pages@v4
-        id: deployment
-
-  # V1.2-dev → Firebase Preview Channel
-  deploy-preview:
-    if: github.ref == 'refs/heads/v1.2.0-dev'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.29.0'
-          channel: 'stable'
-      - run: flutter pub get
-      - run: flutter build web --release
-      - run: npm install -g firebase-tools
-      - name: Deploy to Firebase Preview
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > service_account.json
-          export GOOGLE_APPLICATION_CREDENTIALS=$PWD/service_account.json
-          firebase hosting:channel:deploy dev --expires 30d --project ${{ secrets.FIREBASE_PROJECT_ID }}
+            jobs:
+              deploy:
+                  runs-on: ubuntu-latest
+                      environment:
+                            name: github-pages
+                                  url: ${{ steps.deployment.outputs.page_url }}
+                                      steps:
+                                            - uses: actions/checkout@v4
+                                                    with:
+                                                              ref: 1811e3d
+                                                                    - uses: subosito/flutter-action@v2
+                                                                            with:
+                                                                                      flutter-version: '3.29.0'
+                                                                                                channel: 'stable'
+                                                                                                      - run: flutter pub get
+                                                                                                            - run: flutter build web --release --base-href="/ilk_uygulama/"
+                                                                                                                  - uses: actions/configure-pages@v5
+                                                                                                                        - uses: actions/upload-pages-artifact@v4
+                                                                                                                                with:
+                                                                                                                                          path: build/web
+                                                                                                                                                - uses: actions/deploy-pages@v4
+                                                                                                                                                        id: deployment
