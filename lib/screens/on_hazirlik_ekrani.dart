@@ -15310,13 +15310,15 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _pulseOkunuyor
-                            ? 'Pulse verileri okunuyor...'
-                            : _myDominosOkunuyor
-                                ? 'My Dominos verileri okunuyor...'
-                                : _posOkunuyor
-                                    ? 'POS fişleri okunuyor...'
-                                    : _okumaMesaji,
+                        _okumaMesaji.isNotEmpty
+                            ? _okumaMesaji
+                            : _pulseOkunuyor
+                                ? 'Pulse verileri okunuyor...'
+                                : _myDominosOkunuyor
+                                    ? 'My Dominos verileri okunuyor...'
+                                    : _posOkunuyor
+                                        ? 'POS fişleri okunuyor...'
+                                        : _okumaMesaji,
                         style:
                             const TextStyle(color: Colors.white, fontSize: 13),
                       ),
