@@ -2912,6 +2912,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String geminiApiKey,
     required String groqApiKey,
+    void Function(String mesaj)? onDurum,
   }) async {
     final geminiModeller = [
       {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
@@ -2919,6 +2920,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     ];
 
     for (final entry in geminiModeller) {
+      onDurum?.call('⏳ \${entry[\'label\']} ile okunuyor...');
       try {
         final result = await _geminiOku(
           base64Image: base64Image,
@@ -2926,12 +2928,15 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           prompt: prompt,
           apiKey: geminiApiKey,
           model: entry['model']!,
+          onDurum: (msg) => onDurum?.call('⏳ \${entry[\'label\']}: \$msg'),
         );
         if (result != null) return {'metin': result, 'api': entry['label']!};
       } catch (_) {}
+      onDurum?.call('⚠️ \${entry[\'label\']} başarısız, sonraki deneniyor...');
     }
 
     if (groqApiKey.isNotEmpty) {
+      onDurum?.call('⏳ Groq ile okunuyor...');
       try {
         final result = await _groqOku(
           base64Image: base64Image,
@@ -2953,6 +2958,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String apiKey,
     required String model,
+    void Function(String msg)? onDurum,
   }) async {
     for (int deneme = 1; deneme <= 2; deneme++) {
       try {
@@ -2989,15 +2995,20 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           return text.isNotEmpty ? text : null;
         }
         // 429 = kota doldu → direkt sonraki modele geç
-        if (response.statusCode == 429) return null;
+        if (response.statusCode == 429) {
+          onDurum?.call('Kota doldu, sonraki deneniyor...');
+          return null;
+        }
         // 503 = meşgul → 5sn bekle, 1 kez retry
         if (response.statusCode == 503 && deneme == 1) {
+          onDurum?.call('Meşgul, 5sn bekleniyor...');
           await Future.delayed(const Duration(seconds: 5));
           continue;
         }
         return null;
       } catch (_) {
         if (deneme == 1) {
+          onDurum?.call('Hata, tekrar deneniyor...');
           await Future.delayed(const Duration(seconds: 3));
           continue;
         }
@@ -3409,6 +3420,9 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       if (fallbackSonuc == null) {
@@ -3734,6 +3748,9 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       if (fallbackSonuc == null) {
@@ -4033,6 +4050,9 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       setState(() => _myDominosOkunuyor = false);
