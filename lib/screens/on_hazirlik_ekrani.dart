@@ -93,6 +93,10 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
   final Map<String, String> _eskiMyDomDegler =
       {}; // İptal için eski MyDom değerleri
   String _okumaMesaji = ''; // Alt banttaki mesaj
+
+  // API key cache — uygulama açılışında bir kez yüklenir
+  String _geminiApiKey = '';
+  String _groqApiKey = '';
   final Map<String, TextEditingController> _pulseKiyasCtrl =
       {}; // Pulse manuel giriş
   final Map<String, TextEditingController> _myDomKiyasCtrl =
@@ -200,6 +204,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     _yemekKartiCinsleriniYukle();
     _onlineOdemeleriYukle();
     _subeAdlariniYukle();
+    _apiKeyleriniYukle(); // API key cache
     for (var t in _dovizTurleri) {
       _dovizBankayaYatiranCtrl[t] = TextEditingController();
     }
@@ -1009,6 +1014,18 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     } catch (_) {
       /* sessiz — yükleme/işlem başarısız */
     }
+  }
+
+  // API key'leri uygulama açılışında bir kez Firestore'dan çek
+  Future<void> _apiKeyleriniYukle() async {
+    try {
+      final ayarDoc = await FirebaseFirestore.instance
+          .collection('ayarlar')
+          .doc('gemini')
+          .get();
+      _geminiApiKey = ayarDoc.data()?['apiKey'] as String? ?? '';
+      _groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
+    } catch (_) {}
   }
 
   Future<void> _banknotlariYukle() async {
@@ -3057,11 +3074,8 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
   }) async {
     try {
       // Gemini API key Firestore'dan al
-      final ayarDoc = await FirebaseFirestore.instance
-          .collection('ayarlar')
-          .doc('gemini')
-          .get();
-      final apiKey = ayarDoc.data()?['apiKey'] as String? ?? '';
+      // API key cache'den al (initState'te yüklendi)
+      final apiKey = _geminiApiKey;
       if (apiKey.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -3383,7 +3397,7 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       }
 
       // Fallback zinciri: 3.1 → 2.5 → Groq
-      final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
+      final groqApiKey = _groqApiKey;
       final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
@@ -3640,11 +3654,8 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
 
   Future<void> _posResmiOku({ImageSource source = ImageSource.gallery}) async {
     try {
-      final ayarDoc = await FirebaseFirestore.instance
-          .collection('ayarlar')
-          .doc('gemini')
-          .get();
-      final apiKey = ayarDoc.data()?['apiKey'] as String? ?? '';
+      // API key cache'den al (initState'te yüklendi)
+      final apiKey = _geminiApiKey;
       if (apiKey.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -3715,7 +3726,7 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         return;
       }
 
-      final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
+      final groqApiKey = _groqApiKey;
       final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
@@ -3835,11 +3846,8 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
   }) async {
     try {
       // Gemini API key Firestore'dan al
-      final ayarDoc = await FirebaseFirestore.instance
-          .collection('ayarlar')
-          .doc('gemini')
-          .get();
-      final apiKey = ayarDoc.data()?['apiKey'] as String? ?? '';
+      // API key cache'den al (initState'te yüklendi)
+      final apiKey = _geminiApiKey;
       if (apiKey.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -4017,7 +4025,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       }
 
       // Fallback zinciri: 3.1 → 2.5 → Groq
-      final groqApiKey = ayarDoc.data()?['groqApiKey'] as String? ?? '';
+      final groqApiKey = _groqApiKey;
       final fallbackSonuc = await _gorselOkuFallback(
         base64Image: base64Image,
         mimeType: mimeType,
