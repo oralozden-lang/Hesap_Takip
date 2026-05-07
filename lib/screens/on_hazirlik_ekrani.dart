@@ -2952,6 +2952,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
       );
       if (result != null) return {'metin': result, 'api': entry['label']!};
       onDurum?.call('⚠️ ${entry["label"]} başarısız${hataDetay != null ? " ($hataDetay)" : ""}');
+      await Future.delayed(const Duration(seconds: 2)); // Hata mesajını göster
     }
 
     // Groq son çare
