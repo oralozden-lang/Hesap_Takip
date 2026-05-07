@@ -2914,26 +2914,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String groqApiKey,
     void Function(String mesaj)? onDurum,
   }) async {
-    final geminiModeller = [
-      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
-      {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5'},
-    ];
-
-    for (final entry in geminiModeller) {
-      onDurum?.call('⏳ ${entry['label']} ile okunuyor...');
-      try {
-        final result = await _geminiOku(
-          base64Image: base64Image,
-          mimeType: mimeType,
-          prompt: prompt,
-          apiKey: geminiApiKey,
-          model: entry['model']!,
-        );
-        if (result != null) return {'metin': result, 'api': entry['label']!};
-      } catch (_) {}
-      onDurum?.call('⚠️ ${entry['label']} başarısız');
-    }
-
+    // Önce Groq dene — hızlı ve ücretsiz
     if (groqApiKey.isNotEmpty) {
       onDurum?.call('⏳ Groq ile okunuyor...');
       try {
@@ -2945,6 +2926,28 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         );
         if (result != null) return {'metin': result, 'api': 'Groq (Llama 4)'};
       } catch (_) {}
+      onDurum?.call('⚠️ Groq başarısız');
+    }
+
+    // Gemini fallback: 3.1 → 2.5
+    final geminiModeller = [
+      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
+      {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5'},
+    ];
+
+    for (final entry in geminiModeller) {
+      onDurum?.call('⏳ ${entry["label"]} ile okunuyor...');
+      try {
+        final result = await _geminiOku(
+          base64Image: base64Image,
+          mimeType: mimeType,
+          prompt: prompt,
+          apiKey: geminiApiKey,
+          model: entry['model']!,
+        );
+        if (result != null) return {'metin': result, 'api': entry['label']!};
+      } catch (_) {}
+      onDurum?.call('⚠️ ${entry["label"]} başarısız');
     }
 
     return null;
