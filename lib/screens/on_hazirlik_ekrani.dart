@@ -2914,25 +2914,11 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String groqApiKey,
     void Function(String mesaj)? onDurum,
   }) async {
-    // Önce Groq dene — hızlı ve ücretsiz
-    if (groqApiKey.isNotEmpty) {
-      onDurum?.call('⏳ Groq ile okunuyor...');
-      try {
-        final result = await _groqOku(
-          base64Image: base64Image,
-          mimeType: mimeType,
-          prompt: prompt,
-          apiKey: groqApiKey,
-        );
-        if (result != null) return {'metin': result, 'api': 'Groq (Llama 4)'};
-      } catch (_) {}
-      onDurum?.call('⚠️ Groq başarısız');
-    }
-
-    // Gemini fallback: 3.1 → 2.5
+    // Fallback zinciri: 3.1 → 2.5 → Groq
+    // Her model 1 kez denenir, başarısızsa sonrakine geçilir
     final geminiModeller = [
-      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
-      {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5'},
+      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1', 'timeout': '15'},
+      {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5', 'timeout': '30'},
     ];
 
     for (final entry in geminiModeller) {
@@ -2944,10 +2930,25 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           prompt: prompt,
           apiKey: geminiApiKey,
           model: entry['model']!,
+          timeoutSaniye: int.parse(entry['timeout']!),
         );
         if (result != null) return {'metin': result, 'api': entry['label']!};
       } catch (_) {}
       onDurum?.call('⚠️ ${entry["label"]} başarısız');
+    }
+
+    // Groq son çare
+    if (groqApiKey.isNotEmpty) {
+      onDurum?.call('⏳ Groq ile okunuyor...');
+      try {
+        final result = await _groqOku(
+          base64Image: base64Image,
+          mimeType: mimeType,
+          prompt: prompt,
+          apiKey: groqApiKey,
+        );
+        if (result != null) return {'metin': result, 'api': 'Groq (Llama 4)'};
+      } catch (_) {}
     }
 
     return null;
@@ -2960,6 +2961,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String apiKey,
     required String model,
+    int timeoutSaniye = 30,
   }) async {
     try {
         final response = await http
@@ -2985,7 +2987,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
                 'generationConfig': {'temperature': 0},
               }),
             )
-            .timeout(const Duration(seconds: 30));
+            .timeout(Duration(seconds: timeoutSaniye));
 
         if (response.statusCode == 200) {
           final responseJson = jsonDecode(response.body);
