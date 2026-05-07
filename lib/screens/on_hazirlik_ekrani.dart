@@ -2912,7 +2912,6 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String geminiApiKey,
     required String groqApiKey,
-    void Function(String mesaj)? onDurum,
   }) async {
     final geminiModeller = [
       {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
@@ -2920,7 +2919,6 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     ];
 
     for (final entry in geminiModeller) {
-      onDurum?.call('⏳ \${entry[\'label\']} ile okunuyor...');
       try {
         final result = await _geminiOku(
           base64Image: base64Image,
@@ -2928,15 +2926,12 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           prompt: prompt,
           apiKey: geminiApiKey,
           model: entry['model']!,
-          onDurum: (msg) => onDurum?.call('⏳ \${entry[\'label\']}: \$msg'),
         );
         if (result != null) return {'metin': result, 'api': entry['label']!};
       } catch (_) {}
-      onDurum?.call('⚠️ \${entry[\'label\']} başarısız, sonraki deneniyor...');
     }
 
     if (groqApiKey.isNotEmpty) {
-      onDurum?.call('⏳ Groq ile okunuyor...');
       try {
         final result = await _groqOku(
           base64Image: base64Image,
@@ -2958,7 +2953,6 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String apiKey,
     required String model,
-    void Function(String msg)? onDurum,
   }) async {
     for (int deneme = 1; deneme <= 2; deneme++) {
       try {
@@ -2996,19 +2990,16 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         }
         // 429 = kota doldu → direkt sonraki modele geç
         if (response.statusCode == 429) {
-          onDurum?.call('Kota doldu, sonraki deneniyor...');
           return null;
         }
         // 503 = meşgul → 5sn bekle, 1 kez retry
         if (response.statusCode == 503 && deneme == 1) {
-          onDurum?.call('Meşgul, 5sn bekleniyor...');
           await Future.delayed(const Duration(seconds: 5));
           continue;
         }
         return null;
       } catch (_) {
         if (deneme == 1) {
-          onDurum?.call('Hata, tekrar deneniyor...');
           await Future.delayed(const Duration(seconds: 3));
           continue;
         }
@@ -3420,9 +3411,6 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
-        onDurum: (msg) {
-          if (mounted) setState(() => _okumaMesaji = msg);
-        },
       );
 
       if (fallbackSonuc == null) {
@@ -3722,18 +3710,22 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
       const prompt = """Bu fotoğrafta POS günsonu fişleri ve/veya Z raporu var.
 ÖNCE kontrol et:
 1. Resim net mi? Net değilse: {"hata": "Resim bulanık veya okunamıyor"}
-2. POS fişi veya Z raporu mu? Değilse: {"hata": "Bu resim POS fişi veya Z raporu değil"}
+2. POS fişi veya Z raporu içeriyor mu? Değilse: {"hata": "Bu resim POS fişi veya Z raporu değil"}
 
-Resim Z raporu ise:
-- Banka/Kredi Kartı veya Kredi Kartı satırındaki rakamı al (tek tutar)
-- Sadece JSON: {"poslar": [4595.00]}
+Resimde ne varsa hepsini tara ve aşağıdaki kurallara göre tüm tutarları listeye ekle:
 
-Resim POS günsonu fişi ise:
+Z RAPORU varsa:
+- "Banka/Kredi Kartı" veya "Kredi Kartı" satırındaki tutarı al
+- Birden fazla Z raporu varsa her birinden ayrı ayrı al
+
+POS GÜNSONU FİŞİ varsa (GENEL TOPLAM yazan fiş):
 - Her fişteki GENEL TOPLAM rakamını al
 - Kısmi görünse de kabul et: NEL TOPLAM, ENEL TOPLAM, GENEL TOPLAM hepsi aynı
-- Birden fazla fiş varsa hepsini ayrı ayrı listeye ekle
+- Birden fazla fiş varsa hepsini ayrı ayrı al
 
-Her iki durumda da sayılarda virgülü noktaya çevir.
+Resimde hem Z raporu hem POS fişi varsa ikisinden de tüm tutarları listeye ekle.
+
+Sayılarda virgülü noktaya çevir.
 Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
 
       if (_posIptalEdildi) {
@@ -3748,9 +3740,6 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
-        onDurum: (msg) {
-          if (mounted) setState(() => _okumaMesaji = msg);
-        },
       );
 
       if (fallbackSonuc == null) {
@@ -4050,9 +4039,6 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
-        onDurum: (msg) {
-          if (mounted) setState(() => _okumaMesaji = msg);
-        },
       );
 
       setState(() => _myDominosOkunuyor = false);
@@ -15310,15 +15296,13 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _okumaMesaji.isNotEmpty
-                            ? _okumaMesaji
-                            : _pulseOkunuyor
-                                ? 'Pulse verileri okunuyor...'
-                                : _myDominosOkunuyor
-                                    ? 'My Dominos verileri okunuyor...'
-                                    : _posOkunuyor
-                                        ? 'POS fişleri okunuyor...'
-                                        : _okumaMesaji,
+                        _pulseOkunuyor
+                            ? 'Pulse verileri okunuyor...'
+                            : _myDominosOkunuyor
+                                ? 'My Dominos verileri okunuyor...'
+                                : _posOkunuyor
+                                    ? 'POS fişleri okunuyor...'
+                                    : _okumaMesaji,
                         style:
                             const TextStyle(color: Colors.white, fontSize: 13),
                       ),
