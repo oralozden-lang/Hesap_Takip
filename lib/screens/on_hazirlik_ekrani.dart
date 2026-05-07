@@ -2912,6 +2912,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String geminiApiKey,
     required String groqApiKey,
+    void Function(String mesaj)? onDurum,
   }) async {
     final geminiModeller = [
       {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1'},
@@ -2919,6 +2920,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     ];
 
     for (final entry in geminiModeller) {
+      onDurum?.call('⏳ ${entry['label']} ile okunuyor...');
       try {
         final result = await _geminiOku(
           base64Image: base64Image,
@@ -2929,9 +2931,11 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         );
         if (result != null) return {'metin': result, 'api': entry['label']!};
       } catch (_) {}
+      onDurum?.call('⚠️ ${entry['label']} başarısız');
     }
 
     if (groqApiKey.isNotEmpty) {
+      onDurum?.call('⏳ Groq ile okunuyor...');
       try {
         final result = await _groqOku(
           base64Image: base64Image,
@@ -3381,6 +3385,9 @@ Sayı formatında virgülü noktaya çevir. Alan bulunamazsa null yaz.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       if (fallbackSonuc == null) {
@@ -3710,6 +3717,9 @@ Sadece JSON: {"poslar": [4595.00, 3193.00]}""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       if (fallbackSonuc == null) {
@@ -4009,6 +4019,9 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         prompt: prompt,
         geminiApiKey: apiKey,
         groqApiKey: groqApiKey,
+        onDurum: (msg) {
+          if (mounted) setState(() => _okumaMesaji = msg);
+        },
       );
 
       setState(() => _myDominosOkunuyor = false);
@@ -15266,13 +15279,15 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _pulseOkunuyor
-                            ? 'Pulse verileri okunuyor...'
-                            : _myDominosOkunuyor
-                                ? 'My Dominos verileri okunuyor...'
-                                : _posOkunuyor
-                                    ? 'POS fişleri okunuyor...'
-                                    : _okumaMesaji,
+                        _okumaMesaji.isNotEmpty
+                            ? _okumaMesaji
+                            : _pulseOkunuyor
+                                ? 'Pulse verileri okunuyor...'
+                                : _myDominosOkunuyor
+                                    ? 'My Dominos verileri okunuyor...'
+                                    : _posOkunuyor
+                                        ? 'POS fişleri okunuyor...'
+                                        : _okumaMesaji,
                         style:
                             const TextStyle(color: Colors.white, fontSize: 13),
                       ),
