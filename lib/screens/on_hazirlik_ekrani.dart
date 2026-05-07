@@ -2940,18 +2940,18 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
 
     for (final entry in geminiModeller) {
       onDurum?.call('⏳ ${entry["label"]} ile okunuyor...');
-      try {
-        final result = await _geminiOku(
-          base64Image: base64Image,
-          mimeType: mimeType,
-          prompt: prompt,
-          apiKey: geminiApiKey,
-          model: entry['model']!,
-          timeoutSaniye: int.parse(entry['timeout']!),
-        );
-        if (result != null) return {'metin': result, 'api': entry['label']!};
-      } catch (_) {}
-      onDurum?.call('⚠️ ${entry["label"]} başarısız');
+      String? hataDetay;
+      final result = await _geminiOku(
+        base64Image: base64Image,
+        mimeType: mimeType,
+        prompt: prompt,
+        apiKey: geminiApiKey,
+        model: entry['model']!,
+        timeoutSaniye: int.parse(entry['timeout']!),
+        onHata: (h) => hataDetay = h,
+      );
+      if (result != null) return {'metin': result, 'api': entry['label']!};
+      onDurum?.call('⚠️ ${entry["label"]} başarısız${hataDetay != null ? " ($hataDetay)" : ""}');
     }
 
     // Groq son çare
@@ -2972,6 +2972,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
   }
 
   // Tek Gemini modeli ile okuma
+  // Başarılı → metin döner, başarısız → null döner, hataKodu set edilir
   Future<String?> _geminiOku({
     required String base64Image,
     required String mimeType,
@@ -2979,6 +2980,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String apiKey,
     required String model,
     int timeoutSaniye = 30,
+    void Function(String hata)? onHata,
   }) async {
     try {
         final response = await http
@@ -3013,8 +3015,13 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
               '';
           return text.isNotEmpty ? text : null;
         }
+        onHata?.call('HTTP ${response.statusCode}');
         return null;
-      } catch (_) {
+      } on TimeoutException {
+        onHata?.call('Zaman aşımı (${timeoutSaniye}sn)');
+        return null;
+      } catch (e) {
+        onHata?.call('Hata: $e');
         return null;
       }
   }
