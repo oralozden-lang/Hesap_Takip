@@ -2934,7 +2934,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     // Fallback zinciri: 3.1 → 2.5 → Groq
     // Her model 1 kez denenir, başarısızsa sonrakine geçilir
     final geminiModeller = [
-      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1', 'timeout': '5'},
+      {'model': 'gemini-3.1-flash-lite-preview', 'label': 'Gemini 3.1', 'timeout': '10'},
       {'model': 'gemini-2.5-flash', 'label': 'Gemini 2.5', 'timeout': '30'},
     ];
 
