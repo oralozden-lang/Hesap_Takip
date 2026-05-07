@@ -2954,8 +2954,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String apiKey,
     required String model,
   }) async {
-    for (int deneme = 1; deneme <= 2; deneme++) {
-      try {
+    try {
         final response = await http
             .post(
               Uri.parse(
@@ -2988,25 +2987,10 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
               '';
           return text.isNotEmpty ? text : null;
         }
-        // 429 = kota doldu → direkt sonraki modele geç
-        if (response.statusCode == 429) {
-          return null;
-        }
-        // 503 = meşgul → 5sn bekle, 1 kez retry
-        if (response.statusCode == 503 && deneme == 1) {
-          await Future.delayed(const Duration(seconds: 5));
-          continue;
-        }
         return null;
       } catch (_) {
-        if (deneme == 1) {
-          await Future.delayed(const Duration(seconds: 3));
-          continue;
-        }
         return null;
       }
-    }
-    return null;
   }
 
   // Groq ile okuma — llama-4-scout vision
@@ -3016,8 +3000,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     required String prompt,
     required String apiKey,
   }) async {
-    for (int deneme = 1; deneme <= 2; deneme++) {
-      try {
+    try {
         final response = await http
             .post(
               Uri.parse('https://api.groq.com/openai/v1/chat/completions'),
@@ -3054,23 +3037,10 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
                   '';
           return text.isNotEmpty ? text : null;
         }
-        // 429 = kota → direkt çık
-        if (response.statusCode == 429) return null;
-        // 503 = meşgul → 5sn bekle, retry
-        if (response.statusCode == 503 && deneme == 1) {
-          await Future.delayed(const Duration(seconds: 5));
-          continue;
-        }
         return null;
       } catch (_) {
-        if (deneme == 1) {
-          await Future.delayed(const Duration(seconds: 3));
-          continue;
-        }
         return null;
       }
-    }
-    return null;
   }
 
   Future<void> _pulseResmiOku({
