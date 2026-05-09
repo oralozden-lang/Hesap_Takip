@@ -11170,6 +11170,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       // 5. Kasa Özeti
       bolumBaslik('KASA ÖZETİ', PdfColors.green700),
       pw.SizedBox(height: 4),
+      // ── TL Kartı ──
       pw.Container(
         margin: const pw.EdgeInsets.only(bottom: 6),
         padding: const pw.EdgeInsets.all(8),
@@ -11253,6 +11254,93 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           ],
         ),
       ),
+      // ── Döviz Kartları (Kasa Özeti) ──
+      // _kasaOzetiSection ile aynı mantık: _buGunDovizMiktari > 0 olanlar
+      ..._dovizTurleri
+          .where((t) => _buGunDovizMiktari(t) > 0)
+          .expand((t) {
+        final sembol = t == 'USD' ? r'$' : t == 'EUR' ? '€' : '£';
+        final bgRenk = t == 'USD'
+            ? PdfColor.fromHex('#FFF8E1')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#F3E5F5')
+                : PdfColor.fromHex('#E8F5E9');
+        final borderRenk = t == 'USD'
+            ? PdfColor.fromHex('#FFCC80')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#CE93D8')
+                : PdfColor.fromHex('#A5D6A7');
+        final yaziRenk = t == 'USD'
+            ? PdfColor.fromHex('#E65100')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#6A1B9A')
+                : PdfColor.fromHex('#1B5E20');
+        final miktar = _buGunDovizMiktari(t);
+        final kur = _dovizKur(t);
+        final tlKarsiligi = miktar * kur;
+        return [
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 6),
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: bgRenk,
+              border: pw.Border.all(color: borderRenk),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      '$sembol $t',
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 10,
+                        color: yaziRenk,
+                      ),
+                    ),
+                    pw.Text(
+                      '$sembol ${miktar.toStringAsFixed(2)}',
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 11,
+                        color: yaziRenk,
+                      ),
+                    ),
+                  ],
+                ),
+                if (kur > 0) ...[
+                  pw.SizedBox(height: 2),
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        'TL Karşılığı',
+                        style: pw.TextStyle(
+                          font: font,
+                          fontSize: 9,
+                          color: yaziRenk,
+                        ),
+                      ),
+                      pw.Text(
+                        fmt(tlKarsiligi),
+                        style: pw.TextStyle(
+                          font: font,
+                          fontSize: 9,
+                          color: yaziRenk,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ];
+      }),
+      // ── Günlük Toplam Kasa Kalanı (TL + dövizler) ──
       pw.Container(
         padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         color: _gunlukKasaKalani >= 0 ? PdfColors.green700 : PdfColors.red700,
@@ -11357,73 +11445,71 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         PdfColors.blue900,
         toplam: fmt(_anaKasaKalani),
       ),
+      pw.SizedBox(height: 4),
+      // ── TL Kartı ──
       pw.Container(
-        padding: const pw.EdgeInsets.all(6),
+        margin: const pw.EdgeInsets.only(bottom: 6),
+        padding: const pw.EdgeInsets.all(8),
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.grey300),
+          color: PdfColors.blue50,
+          border: pw.Border.all(color: PdfColors.blue200),
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
         ),
         child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Container(
-              margin: const pw.EdgeInsets.only(bottom: 4),
-              padding: const pw.EdgeInsets.all(6),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.blue50,
-                border: pw.Border.all(color: PdfColors.blue200),
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            pw.Text(
+              'TL',
+              style: pw.TextStyle(
+                font: fontBold,
+                fontSize: 10,
+                color: PdfColor.fromHex('#1565C0'),
               ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+            ),
+            pw.SizedBox(height: 4),
+            satir('Devreden Ana Kasa', fmt(_oncekiAnaKasaKalani)),
+            satir('Günlük Kasa Kalanı (TL)', fmt(_gunlukKasaKalaniTL)),
+            if (_parseDouble(_bankayaYatiranCtrl.text) > 0)
+              satir(
+                'Bankaya Yatırılan',
+                fmt(_parseDouble(_bankayaYatiranCtrl.text)),
+              ),
+            if (_toplamAnaKasaHarcama > 0)
+              satir('Ana Kasa Harcamalar', fmt(_toplamAnaKasaHarcama)),
+            if (_nakitCikislar.any((h) => _parseDouble(h.tutarCtrl.text) > 0))
+              satir(
+                'Nakit Çıkış',
+                fmt(_nakitCikislar.fold(
+                  0.0,
+                  (s, h) => s + _parseDouble(h.tutarCtrl.text),
+                )),
+              ),
+            pw.Divider(color: PdfColors.blue200),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 4,
+              ),
+              color: _anaKasaKalani >= 0
+                  ? PdfColors.green700
+                  : PdfColors.red700,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'TL',
+                    'Ana Kasa Kalanı',
                     style: pw.TextStyle(
                       font: fontBold,
                       fontSize: 10,
-                      color: PdfColor.fromHex('#1565C0'),
+                      color: PdfColors.white,
                     ),
                   ),
-                  pw.SizedBox(height: 4),
-                  satir('Devreden Ana Kasa', fmt(_oncekiAnaKasaKalani)),
-                  satir('Günlük Kasa Kalanı (TL)', fmt(_gunlukKasaKalaniTL)),
-                  if (_parseDouble(_bankayaYatiranCtrl.text) > 0)
-                    satir(
-                      'Bankaya Yatırılan',
-                      fmt(_parseDouble(_bankayaYatiranCtrl.text)),
-                    ),
-                  if (_toplamAnaKasaHarcama > 0)
-                    satir('Ana Kasa Harcamalar', fmt(_toplamAnaKasaHarcama)),
-                  if (_toplamNakitCikis > 0)
-                    satir('Nakit Çıkış', fmt(_toplamNakitCikis)),
-                  pw.Divider(color: PdfColors.blue200),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 4,
-                    ),
-                    color: _anaKasaKalani >= 0
-                        ? PdfColors.green700
-                        : PdfColors.red700,
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'Ana Kasa Kalanı',
-                          style: pw.TextStyle(
-                            font: fontBold,
-                            fontSize: 10,
-                            color: PdfColors.white,
-                          ),
-                        ),
-                        pw.Text(
-                          fmt(_anaKasaKalani),
-                          style: pw.TextStyle(
-                            font: fontBold,
-                            fontSize: 10,
-                            color: PdfColors.white,
-                          ),
-                        ),
-                      ],
+                  pw.Text(
+                    fmt(_anaKasaKalani),
+                    style: pw.TextStyle(
+                      font: fontBold,
+                      fontSize: 10,
+                      color: PdfColors.white,
                     ),
                   ),
                 ],
@@ -11432,6 +11518,104 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           ],
         ),
       ),
+      // ── Döviz Kartları (Ana Kasa) ──
+      // _anaKasaSection ile aynı mantık: kalan != 0 || bugun > 0 || devreden > 0
+      ..._dovizTurleri
+          .where(
+            (t) =>
+                _dovizAnaKasaKalani(t) != 0 ||
+                _buGunDovizMiktari(t) > 0 ||
+                (_devredenDovizMiktarlari[t] ?? 0) > 0,
+          )
+          .expand((t) {
+        final sembol = t == 'USD' ? r'$' : t == 'EUR' ? '€' : '£';
+        final bgRenk = t == 'USD'
+            ? PdfColor.fromHex('#FFF8E1')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#F3E5F5')
+                : PdfColor.fromHex('#E8F5E9');
+        final borderRenk = t == 'USD'
+            ? PdfColor.fromHex('#FFCC80')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#CE93D8')
+                : PdfColor.fromHex('#A5D6A7');
+        final yaziRenk = t == 'USD'
+            ? PdfColor.fromHex('#E65100')
+            : t == 'EUR'
+                ? PdfColor.fromHex('#6A1B9A')
+                : PdfColor.fromHex('#1B5E20');
+        final kalan = _dovizAnaKasaKalani(t);
+        final nakitCikisT = _nakitDovizCikis(t);
+        return [
+          pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 6),
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: bgRenk,
+              border: pw.Border.all(color: borderRenk),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  '$sembol $t',
+                  style: pw.TextStyle(
+                    font: fontBold,
+                    fontSize: 10,
+                    color: yaziRenk,
+                  ),
+                ),
+                pw.SizedBox(height: 4),
+                satirGirinti(
+                  'Devreden Ana Kasa',
+                  '$sembol ${(_devredenDovizMiktarlari[t] ?? 0).toStringAsFixed(2)}',
+                  renk: yaziRenk,
+                ),
+                satirGirinti(
+                  'Günlük Kasa Kalanı',
+                  '$sembol ${_buGunDovizMiktari(t).toStringAsFixed(2)}',
+                  renk: yaziRenk,
+                ),
+                if (_dovizBankayaYatirilan(t) > 0)
+                  satirGirinti(
+                    'Bankaya Yatırılan',
+                    '$sembol ${_dovizBankayaYatirilan(t).toStringAsFixed(2)}',
+                    renk: yaziRenk,
+                  ),
+                if (nakitCikisT > 0)
+                  satirGirinti(
+                    'Nakit Çıkış',
+                    '$sembol ${nakitCikisT.toStringAsFixed(2)}',
+                    renk: yaziRenk,
+                  ),
+                pw.Divider(color: borderRenk),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Ana Kasa Kalanı',
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 10,
+                        color: yaziRenk,
+                      ),
+                    ),
+                    pw.Text(
+                      '$sembol ${kalan.toStringAsFixed(2)}',
+                      style: pw.TextStyle(
+                        font: fontBold,
+                        fontSize: 11,
+                        color: kalan >= 0 ? yaziRenk : PdfColors.red700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ];
+      }),
       pw.SizedBox(height: 6),
 
       // 9. Transferler
