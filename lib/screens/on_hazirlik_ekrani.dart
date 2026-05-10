@@ -250,7 +250,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
         if (!mounted || _yukleniyor || _readOnly) return;
         // setState'i bir sonraki frame'e ertele — build sırasında çağrılmasını önle
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
+          if (!mounted || _yukleniyor) return;
           setState(() {
             _degisiklikVar = true;
             if (_duzenlemeAcik) _gercekDegisiklikVar = true;
@@ -272,7 +272,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     ctrl.addListener(() {
       if (!mounted || _yukleniyor || _readOnly) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+        if (!mounted || _yukleniyor) return;
         setState(() {
           _degisiklikVar = true;
           if (_pulseKontrolOnaylandi) _pulseKontrolOnaylandi = false;
@@ -4662,6 +4662,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       await _tarihOncesiKaydet();
 
       await _kilitBirak();
+      if (!mounted) return;
       setState(() {
         _secilenTarih = picked;
         _kilitTutanKullanici = null;
@@ -4864,6 +4865,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         final transferId = data['transferId'] as String? ?? '';
         await doc.reference.delete();
         if (transferId.isNotEmpty) {
+          if (!mounted) return;
           setState(() {
             for (final t in _transferler) {
               if ((t['transferId'] as String? ?? '') == transferId) {
@@ -4995,6 +4997,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
                   int.tryParse(parcalar[2]) ?? 1,
                 );
                 await _kilitBirak();
+                if (!mounted) return;
                 setState(() {
                   _secilenTarih = tarih;
                   _degisiklikVar = false;
@@ -5017,6 +5020,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
                 'bekletildi': true,
                 'zaman': FieldValue.serverTimestamp(),
               });
+              if (!mounted) return;
               setState(() => _bekleyenTransferSayisi++);
             } else if (sonuc == 'dogru' && mounted) {
               // Doğru seçilince reddedildi olarak Firestore'a yaz
@@ -5080,6 +5084,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         final transferId = data['transferId'] as String? ?? '';
         await doc.reference.delete();
         if (transferId.isNotEmpty) {
+          if (!mounted) return;
           setState(() {
             for (final t in _transferler) {
               if ((t['transferId'] as String? ?? '') == transferId) {
@@ -5530,6 +5535,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
               int.tryParse(parcalar[2]) ?? 1,
             );
             await _kilitBirak();
+            if (!mounted) return;
             setState(() {
               _secilenTarih = tarih;
               _degisiklikVar = false;
@@ -5551,6 +5557,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
             'bekletildi': true,
             'zaman': FieldValue.serverTimestamp(),
           });
+          if (!mounted) return;
           setState(() => _bekleyenTransferSayisi++);
         } else if (sonuc == 'tamam' && mounted) {
           // Reddedildi olarak Firestore'a yaz
@@ -6524,6 +6531,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         final dovizAnaKasaMap = data['dovizAnaKasa'] as Map?;
         final dovizListesi = (data['dovizler'] as List?)?.cast<Map>() ?? [];
 
+        if (!mounted) return;
         setState(() {
           for (var t in _dovizTurleri) {
             if (dovizKalanlar != null && dovizKalanlar[t] != null) {
@@ -6546,6 +6554,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           }
         });
       } else {
+        if (!mounted) return;
         setState(() {
           for (var t in _dovizTurleri) {
             _devredenDovizMiktarlari[t] = 0;
@@ -6622,6 +6631,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         final flot = data['gunlukFlot'];
         if (flot != null) {
           final flotDeger = (flot as num).toDouble();
+          if (!mounted) return;
           setState(() {
             _devredenFlotCtrl.text = _formatTL(flotDeger).replaceAll(' ₺', '');
             _otomatikDevredenFlot = flotDeger;
@@ -6629,6 +6639,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         }
         final anaKasaKalani = data['anaKasaKalani'];
         if (anaKasaKalani != null) {
+          if (!mounted) return;
           setState(
             () => _oncekiAnaKasaKalani = (anaKasaKalani as num).toDouble(),
           );
@@ -6638,6 +6649,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         final dovizAnaKasaMap = data['dovizAnaKasa'] as Map?;
         final dovizListesi = (data['dovizler'] as List?)?.cast<Map>() ?? [];
 
+        if (!mounted) return;
         setState(() {
           for (var t in _dovizTurleri) {
             if (dovizKalanlar != null && dovizKalanlar[t] != null) {
@@ -6660,6 +6672,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           }
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _devredenFlotCtrl.clear();
           _oncekiAnaKasaKalani = 0;
@@ -7115,6 +7128,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
             );
             if (onay != true) return; // İptal — kapatmayı engelle
             // Değerleri Firestore'daki doğru değerlerle güncelle
+            if (!mounted) return;
             setState(() {
               _oncekiAnaKasaKalani = oncekiAnaKasa;
               _devredenFlotCtrl.text = _formatTL(
@@ -7191,6 +7205,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
     }
     // ─────────────────────────────────────────────────────────────────────────
 
+    if (!mounted) return;
     setState(() => _kaydediliyor = true);
     try {
       final tarihKey = _tarihKey(_secilenTarih);
@@ -7809,6 +7824,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           kontrol.month == bugun.month &&
           kontrol.day == bugun.day) {
         await _kilitBirak();
+        if (!mounted) return;
         setState(() {
           _secilenTarih = kontrol;
           _kilitTutanKullanici = null;
@@ -8028,6 +8044,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         'bekletildi': false,
       });
 
+      if (!mounted) return;
       setState(() {
         t['gonderildi'] = true;
         t['reddedildi'] = false;
@@ -8098,6 +8115,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         'manuelGelen': true, // A'nın manuel eklediği kayıt
       });
 
+      if (!mounted) return;
       setState(() {
         t['gonderildi'] = true;
         t['transferId'] = transferId;
@@ -8532,6 +8550,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
     final bugun = _bugunuHesapla();
     if (yeniTarih.isAfter(bugun)) return;
     await _kilitBirak();
+    if (!mounted) return;
     setState(() {
       _secilenTarih = yeniTarih;
       _kilitTutanKullanici = null;
@@ -11170,7 +11189,6 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       // 5. Kasa Özeti
       bolumBaslik('KASA ÖZETİ', PdfColors.green700),
       pw.SizedBox(height: 4),
-      // ── TL Kartı ──
       pw.Container(
         margin: const pw.EdgeInsets.only(bottom: 6),
         padding: const pw.EdgeInsets.all(8),
@@ -11254,93 +11272,6 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           ],
         ),
       ),
-      // ── Döviz Kartları (Kasa Özeti) ──
-      // _kasaOzetiSection ile aynı mantık: _buGunDovizMiktari > 0 olanlar
-      ..._dovizTurleri
-          .where((t) => _buGunDovizMiktari(t) > 0)
-          .expand((t) {
-        final sembol = t == 'USD' ? r'$' : t == 'EUR' ? '€' : '£';
-        final bgRenk = t == 'USD'
-            ? PdfColor.fromHex('#FFF8E1')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#F3E5F5')
-                : PdfColor.fromHex('#E8F5E9');
-        final borderRenk = t == 'USD'
-            ? PdfColor.fromHex('#FFCC80')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#CE93D8')
-                : PdfColor.fromHex('#A5D6A7');
-        final yaziRenk = t == 'USD'
-            ? PdfColor.fromHex('#E65100')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#6A1B9A')
-                : PdfColor.fromHex('#1B5E20');
-        final miktar = _buGunDovizMiktari(t);
-        final kur = _dovizKur(t);
-        final tlKarsiligi = miktar * kur;
-        return [
-          pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: bgRenk,
-              border: pw.Border.all(color: borderRenk),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      '$sembol $t',
-                      style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 10,
-                        color: yaziRenk,
-                      ),
-                    ),
-                    pw.Text(
-                      '$sembol ${miktar.toStringAsFixed(2)}',
-                      style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 11,
-                        color: yaziRenk,
-                      ),
-                    ),
-                  ],
-                ),
-                if (kur > 0) ...[
-                  pw.SizedBox(height: 2),
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text(
-                        'TL Karşılığı',
-                        style: pw.TextStyle(
-                          font: font,
-                          fontSize: 9,
-                          color: yaziRenk,
-                        ),
-                      ),
-                      pw.Text(
-                        fmt(tlKarsiligi),
-                        style: pw.TextStyle(
-                          font: font,
-                          fontSize: 9,
-                          color: yaziRenk,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ];
-      }),
-      // ── Günlük Toplam Kasa Kalanı (TL + dövizler) ──
       pw.Container(
         padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         color: _gunlukKasaKalani >= 0 ? PdfColors.green700 : PdfColors.red700,
@@ -11445,71 +11376,73 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
         PdfColors.blue900,
         toplam: fmt(_anaKasaKalani),
       ),
-      pw.SizedBox(height: 4),
-      // ── TL Kartı ──
       pw.Container(
-        margin: const pw.EdgeInsets.only(bottom: 6),
-        padding: const pw.EdgeInsets.all(8),
+        padding: const pw.EdgeInsets.all(6),
         decoration: pw.BoxDecoration(
-          color: PdfColors.blue50,
-          border: pw.Border.all(color: PdfColors.blue200),
-          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+          border: pw.Border.all(color: PdfColors.grey300),
         ),
         child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(
-              'TL',
-              style: pw.TextStyle(
-                font: fontBold,
-                fontSize: 10,
-                color: PdfColor.fromHex('#1565C0'),
-              ),
-            ),
-            pw.SizedBox(height: 4),
-            satir('Devreden Ana Kasa', fmt(_oncekiAnaKasaKalani)),
-            satir('Günlük Kasa Kalanı (TL)', fmt(_gunlukKasaKalaniTL)),
-            if (_parseDouble(_bankayaYatiranCtrl.text) > 0)
-              satir(
-                'Bankaya Yatırılan',
-                fmt(_parseDouble(_bankayaYatiranCtrl.text)),
-              ),
-            if (_toplamAnaKasaHarcama > 0)
-              satir('Ana Kasa Harcamalar', fmt(_toplamAnaKasaHarcama)),
-            if (_nakitCikislar.any((h) => _parseDouble(h.tutarCtrl.text) > 0))
-              satir(
-                'Nakit Çıkış',
-                fmt(_nakitCikislar.fold(
-                  0.0,
-                  (s, h) => s + _parseDouble(h.tutarCtrl.text),
-                )),
-              ),
-            pw.Divider(color: PdfColors.blue200),
             pw.Container(
-              padding: const pw.EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 4,
+              margin: const pw.EdgeInsets.only(bottom: 4),
+              padding: const pw.EdgeInsets.all(6),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                border: pw.Border.all(color: PdfColors.blue200),
+                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
               ),
-              color: _anaKasaKalani >= 0
-                  ? PdfColors.green700
-                  : PdfColors.red700,
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(
-                    'Ana Kasa Kalanı',
+                    'TL',
                     style: pw.TextStyle(
                       font: fontBold,
                       fontSize: 10,
-                      color: PdfColors.white,
+                      color: PdfColor.fromHex('#1565C0'),
                     ),
                   ),
-                  pw.Text(
-                    fmt(_anaKasaKalani),
-                    style: pw.TextStyle(
-                      font: fontBold,
-                      fontSize: 10,
-                      color: PdfColors.white,
+                  pw.SizedBox(height: 4),
+                  satir('Devreden Ana Kasa', fmt(_oncekiAnaKasaKalani)),
+                  satir('Günlük Kasa Kalanı (TL)', fmt(_gunlukKasaKalaniTL)),
+                  if (_parseDouble(_bankayaYatiranCtrl.text) > 0)
+                    satir(
+                      'Bankaya Yatırılan',
+                      fmt(_parseDouble(_bankayaYatiranCtrl.text)),
+                    ),
+                  if (_toplamAnaKasaHarcama > 0)
+                    satir('Ana Kasa Harcamalar', fmt(_toplamAnaKasaHarcama)),
+                  if (_toplamNakitCikis > 0)
+                    satir('Nakit Çıkış', fmt(_toplamNakitCikis)),
+                  pw.Divider(color: PdfColors.blue200),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    color: _anaKasaKalani >= 0
+                        ? PdfColors.green700
+                        : PdfColors.red700,
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'Ana Kasa Kalanı',
+                          style: pw.TextStyle(
+                            font: fontBold,
+                            fontSize: 10,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                        pw.Text(
+                          fmt(_anaKasaKalani),
+                          style: pw.TextStyle(
+                            font: fontBold,
+                            fontSize: 10,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -11518,104 +11451,6 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           ],
         ),
       ),
-      // ── Döviz Kartları (Ana Kasa) ──
-      // _anaKasaSection ile aynı mantık: kalan != 0 || bugun > 0 || devreden > 0
-      ..._dovizTurleri
-          .where(
-            (t) =>
-                _dovizAnaKasaKalani(t) != 0 ||
-                _buGunDovizMiktari(t) > 0 ||
-                (_devredenDovizMiktarlari[t] ?? 0) > 0,
-          )
-          .expand((t) {
-        final sembol = t == 'USD' ? r'$' : t == 'EUR' ? '€' : '£';
-        final bgRenk = t == 'USD'
-            ? PdfColor.fromHex('#FFF8E1')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#F3E5F5')
-                : PdfColor.fromHex('#E8F5E9');
-        final borderRenk = t == 'USD'
-            ? PdfColor.fromHex('#FFCC80')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#CE93D8')
-                : PdfColor.fromHex('#A5D6A7');
-        final yaziRenk = t == 'USD'
-            ? PdfColor.fromHex('#E65100')
-            : t == 'EUR'
-                ? PdfColor.fromHex('#6A1B9A')
-                : PdfColor.fromHex('#1B5E20');
-        final kalan = _dovizAnaKasaKalani(t);
-        final nakitCikisT = _nakitDovizCikis(t);
-        return [
-          pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: bgRenk,
-              border: pw.Border.all(color: borderRenk),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  '$sembol $t',
-                  style: pw.TextStyle(
-                    font: fontBold,
-                    fontSize: 10,
-                    color: yaziRenk,
-                  ),
-                ),
-                pw.SizedBox(height: 4),
-                satirGirinti(
-                  'Devreden Ana Kasa',
-                  '$sembol ${(_devredenDovizMiktarlari[t] ?? 0).toStringAsFixed(2)}',
-                  renk: yaziRenk,
-                ),
-                satirGirinti(
-                  'Günlük Kasa Kalanı',
-                  '$sembol ${_buGunDovizMiktari(t).toStringAsFixed(2)}',
-                  renk: yaziRenk,
-                ),
-                if (_dovizBankayaYatirilan(t) > 0)
-                  satirGirinti(
-                    'Bankaya Yatırılan',
-                    '$sembol ${_dovizBankayaYatirilan(t).toStringAsFixed(2)}',
-                    renk: yaziRenk,
-                  ),
-                if (nakitCikisT > 0)
-                  satirGirinti(
-                    'Nakit Çıkış',
-                    '$sembol ${nakitCikisT.toStringAsFixed(2)}',
-                    renk: yaziRenk,
-                  ),
-                pw.Divider(color: borderRenk),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Ana Kasa Kalanı',
-                      style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 10,
-                        color: yaziRenk,
-                      ),
-                    ),
-                    pw.Text(
-                      '$sembol ${kalan.toStringAsFixed(2)}',
-                      style: pw.TextStyle(
-                        font: fontBold,
-                        fontSize: 11,
-                        color: kalan >= 0 ? yaziRenk : PdfColors.red700,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ];
-      }),
       pw.SizedBox(height: 6),
 
       // 9. Transferler
