@@ -4722,12 +4722,6 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
           _degisiklikVar = false;
           _yukleniyor = false;
         });
-      // Veri yükleme bittiğinden sonra listener'lar tarafından tetiklenen
-      // değişiklikleri geri sıfırla — tarih değişimi sırasında state temizdir kalsin
-      if (mounted && !_yukleniyor && !_degisiklikVar) {
-        // Listener callback'leştirildi ise, önceki duruma dön
-        if (mounted) setState(() => _degisiklikVar = false);
-      }
     }
   }
 
