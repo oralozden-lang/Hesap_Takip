@@ -4717,6 +4717,9 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       await _formlariTemizle();
       await _oncekiGundenYukle();
     } finally {
+      // Bekleyen addPostFrameCallback'lerin _yukleniyor=true iken çalışması için
+      // bir frame bekle — bu callback'ler _yukleniyor kontrolü yapıp return eder
+      await Future.delayed(Duration.zero);
       if (mounted)
         setState(() {
           _degisiklikVar = false;
@@ -8509,7 +8512,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
 
   // Tarih değişimi öncesi bekleyen değişiklikleri kaydet (await ile)
   Future<void> _tarihOncesiKaydet() async {
-    if (!_degisiklikVar) return;
+    if (!_degisiklikVar || _readOnly) return;
     if (mounted) _appBarMesajGoster('⏳ Kaydediliyor...');
     try {
       final tarihKey = _tarihKey(_secilenTarih);
