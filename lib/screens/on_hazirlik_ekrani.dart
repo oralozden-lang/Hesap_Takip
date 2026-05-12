@@ -271,6 +271,13 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     _pulseCtrlListenerli.add(ctrl);
     ctrl.addListener(() {
       if (!mounted || _yukleniyor || _readOnly) return;
+      // pulseBrut değişince gunlukSatisCtrl'ı da güncelle
+      if (ctrl == _pulseKiyasCtrl['pulseBrut']) {
+        final yeniDeger = ctrl.text;
+        if (_gunlukSatisCtrl.text != yeniDeger) {
+          _gunlukSatisCtrl.text = yeniDeger;
+        }
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _yukleniyor) return;
         setState(() {
