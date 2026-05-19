@@ -1002,8 +1002,10 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                             SizedBox(width: colGap),
                             SizedBox(
                                 width: wSatis,
-                                child: _txt(_fmt(satis),
-                                    renk: Colors.red[700], bold: true)),
+                                child: _col2(
+                                    _fmt(satis),
+                                    _fmtSade(satis / 1.10),
+                                    Colors.red[700]!)),
                             SizedBox(width: colGap),
                             SizedBox(
                                 width: wAnaKasa,
