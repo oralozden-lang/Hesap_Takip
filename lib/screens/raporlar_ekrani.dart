@@ -75,7 +75,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
 
   String _filtreModu = 'ay';
   int _secilenYil = DateTime.now().year;
-  int _secilenAy = DateTime.now().month;
+  // Çoklu ay seçimi — ardışık zorunlu, Set yerine List (sıra önemli değil, min/max alınır)
+  Set<int> _secilenAylar = {DateTime.now().month};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
   Set<String> _secilenSubeler = {};
@@ -188,10 +189,13 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     try {
       final hedefSubeler =
           _secilenSubeler.isEmpty ? _aktifSubeler : _secilenSubeler.toList();
+      // Merkezi giderler için ilk ayın key'i (tek ay veya çok ay başlangıcı)
       final donemKey = _baslangicKey().substring(0, 7);
-      final oncekiDonemKey = _oncekiAyKey(donemKey);
+      // Envanter: son seçilen ay vs ilk seçilen ayın öncesi
+      final envanterKey = _filtreModu == 'ay' ? _envanterDonemKey : '';
+      final envanterOncekiKey = _filtreModu == 'ay' ? _envanterOncekiKey : '';
 
-      // Karşılaştırma dönemi envanter için de önceki ay lazım
+      // Karşılaştırma dönemi
       final karsilastirmaDonemKey =
           _karsilastirmaAcik ? _karsilastirmaBas().substring(0, 7) : '';
       final karsilastirmaOncekiKey =
@@ -209,8 +213,15 @@ class RaporlarWidgetState extends State<RaporlarWidget>
           _gerceklesenGiderlerCek(hedefSubeler, karsilastirmaDonemKey)
         else
           Future.value(<String, List<Map<String, dynamic>>>{}),
-        _envanterlerCek(hedefSubeler, donemKey),
-        _envanterlerCek(hedefSubeler, oncekiDonemKey),
+        // Envanter: sadece ay modunda çek
+        if (_filtreModu == 'ay')
+          _envanterlerCek(hedefSubeler, envanterKey)
+        else
+          Future.value(<String, double>{}),
+        if (_filtreModu == 'ay')
+          _envanterlerCek(hedefSubeler, envanterOncekiKey)
+        else
+          Future.value(<String, double>{}),
         if (_karsilastirmaAcik)
           _envanterlerCek(hedefSubeler, karsilastirmaDonemKey)
         else
@@ -335,20 +346,33 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     return sonuc;
   }
 
+  // Çoklu ay seçiminde en küçük ve en büyük ayı döndürür
+  int get _ilkAy =>
+      _secilenAylar.isEmpty ? DateTime.now().month : _secilenAylar.reduce((a, b) => a < b ? a : b);
+  int get _sonAy =>
+      _secilenAylar.isEmpty ? DateTime.now().month : _secilenAylar.reduce((a, b) => a > b ? a : b);
+
   String _baslangicKey() {
     if (_filtreModu == 'ay') {
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_secilenAy.toString().padLeft(2, '0')}-01';
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_ilkAy.toString().padLeft(2, '0')}-01';
     }
     return '${_baslangic.year.toString().padLeft(4, '0')}-${_baslangic.month.toString().padLeft(2, '0')}-${_baslangic.day.toString().padLeft(2, '0')}';
   }
 
   String _bitisKey() {
     if (_filtreModu == 'ay') {
-      final sonGun = DateTime(_secilenYil, _secilenAy + 1, 0).day;
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_secilenAy.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
+      final sonGun = DateTime(_secilenYil, _sonAy + 1, 0).day;
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_sonAy.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
     }
     return '${_bitis.year.toString().padLeft(4, '0')}-${_bitis.month.toString().padLeft(2, '0')}-${_bitis.day.toString().padLeft(2, '0')}';
   }
+
+  // Envanter için: son seçilen ay key'i ve onun önceki ayı
+  String get _envanterDonemKey =>
+      '${_secilenYil.toString().padLeft(4, '0')}-${_sonAy.toString().padLeft(2, '0')}';
+  String get _envanterOncekiKey => _oncekiAyKey(
+      '${_secilenYil.toString().padLeft(4, '0')}-${_ilkAy.toString().padLeft(2, '0')}');
+
 
   String _karsilastirmaBas() {
     if (_filtreModu == 'aralik') {
@@ -677,17 +701,18 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                         envanterler.values.fold(0.0, (s, v) => s + v);
                     final oncekiEnvToplam =
                         oncekiEnvanterler.values.fold(0.0, (s, v) => s + v);
-                    final envanterFarki =
-                        (buAyEnvToplam > 0 || oncekiEnvToplam > 0)
-                            ? buAyEnvToplam - oncekiEnvToplam
-                            : 0.0;
+                    // Envanter girilmemişse hiç gösterme
+                    final envanterGirilmis = buAyEnvToplam > 0;
+                    final envanterFarki = envanterGirilmis
+                        ? buAyEnvToplam - oncekiEnvToplam
+                        : 0.0;
                     final netKar = satis - toplamGider + envanterFarki;
                     return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const Divider(),
-                          // Envanter satırları — sadece veri varsa göster
-                          if (envanterFarki != 0) ...[
+                          // Envanter satırları — sadece bu ay girilmişse göster
+                          if (envanterGirilmis) ...[
                             _satirOzet(
                               'Önceki Ay Envanteri',
                               oncekiEnvToplam,
@@ -1264,31 +1289,111 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                   ),
                   const SizedBox(height: 12),
                   if (_filtreModu == 'ay') ...[
-                    Row(children: [
-                      Expanded(
-                          child: DropdownButtonFormField<int>(
-                        value: _secilenAy,
-                        decoration: const InputDecoration(
-                            labelText: 'Ay', border: OutlineInputBorder()),
-                        items: List.generate(
-                            12,
-                            (i) => DropdownMenuItem(
-                                value: i + 1, child: Text(_aylar[i]))),
-                        onChanged: (v) => setState(() => _secilenAy = v!),
-                      )),
-                      const SizedBox(width: 8),
-                      Expanded(
-                          child: DropdownButtonFormField<int>(
-                        value: _secilenYil,
-                        decoration: const InputDecoration(
-                            labelText: 'Yıl', border: OutlineInputBorder()),
-                        items: List.generate(5, (i) => DateTime.now().year - i)
-                            .map((y) =>
-                                DropdownMenuItem(value: y, child: Text('$y')))
+                    // Yıl seçimi — chip
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: List.generate(5, (i) => DateTime.now().year - i + 1)
+                            .reversed
+                            .map((y) => Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: ChoiceChip(
+                                    label: Text('$y'),
+                                    selected: _secilenYil == y,
+                                    onSelected: (_) => setState(() {
+                                      _secilenYil = y;
+                                    }),
+                                    selectedColor:
+                                        const Color(0xFF0288D1).withOpacity(0.18),
+                                    checkmarkColor: const Color(0xFF0288D1),
+                                    labelStyle: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: _secilenYil == y
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: _secilenYil == y
+                                          ? const Color(0xFF0288D1)
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ))
                             .toList(),
-                        onChanged: (v) => setState(() => _secilenYil = v!),
-                      )),
-                    ]),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Ay seçimi — çoklu chip, ardışık zorunlu
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: List.generate(12, (i) {
+                        final ay = i + 1;
+                        final secili = _secilenAylar.contains(ay);
+                        // Seçili aralık içinde mi (min ile max arasında)?
+                        final aralik = _secilenAylar.isNotEmpty &&
+                            ay >= _ilkAy &&
+                            ay <= _sonAy;
+                        return FilterChip(
+                          label: Text(_aylar[i].substring(0, 3)),
+                          selected: secili || aralik,
+                          onSelected: (v) {
+                            setState(() {
+                              if (v) {
+                                _secilenAylar.add(ay);
+                                // Ardışık yap: min ile max arasındaki tüm ayları ekle
+                                final min = _secilenAylar
+                                    .reduce((a, b) => a < b ? a : b);
+                                final max = _secilenAylar
+                                    .reduce((a, b) => a > b ? a : b);
+                                _secilenAylar = Set.from(
+                                    List.generate(max - min + 1, (i) => min + i));
+                              } else {
+                                // Çıkarınca yine ardışık kal — sadece tek ay kalıyorsa izin ver
+                                if (_secilenAylar.length > 1) {
+                                  // En yakın uca kadar daralt
+                                  final min = _secilenAylar
+                                      .reduce((a, b) => a < b ? a : b);
+                                  final max = _secilenAylar
+                                      .reduce((a, b) => a > b ? a : b);
+                                  if (ay == min) {
+                                    _secilenAylar = Set.from(List.generate(
+                                        max - (min + 1) + 1, (i) => min + 1 + i));
+                                  } else if (ay == max) {
+                                    _secilenAylar = Set.from(List.generate(
+                                        (max - 1) - min + 1, (i) => min + i));
+                                  }
+                                  // Ortadan çıkarma engellenir (uc dışındakiler)
+                                }
+                              }
+                            });
+                          },
+                          selectedColor:
+                              const Color(0xFF0288D1).withOpacity(0.18),
+                          checkmarkColor: const Color(0xFF0288D1),
+                          labelStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: (secili || aralik)
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: (secili || aralik)
+                                ? const Color(0xFF0288D1)
+                                : Colors.black87,
+                          ),
+                        );
+                      }),
+                    ),
+                    // Seçili dönem özeti
+                    if (_secilenAylar.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _ilkAy == _sonAy
+                            ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                            : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil  (${_sonAy - _ilkAy + 1} ay)',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: const Color(0xFF0288D1),
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
                   ] else ...[
                     Row(children: [
                       Expanded(
@@ -1404,37 +1509,67 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                     onChanged: (v) => setState(() => _karsilastirmaAcik = v),
                   ),
                   if (_karsilastirmaAcik) ...[
-                    if (_filtreModu == 'ay')
-                      Row(children: [
-                        Expanded(
-                            child: DropdownButtonFormField<int>(
-                          value: _karsilastirmaAy,
-                          decoration: const InputDecoration(
-                              labelText: 'Karş. Ay',
-                              border: OutlineInputBorder()),
-                          items: List.generate(
-                              12,
-                              (i) => DropdownMenuItem(
-                                  value: i + 1, child: Text(_aylar[i]))),
-                          onChanged: (v) =>
-                              setState(() => _karsilastirmaAy = v!),
-                        )),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: DropdownButtonFormField<int>(
-                          value: _karsilastirmaYil,
-                          decoration: const InputDecoration(
-                              labelText: 'Karş. Yıl',
-                              border: OutlineInputBorder()),
-                          items: List.generate(
-                                  5, (i) => DateTime.now().year - i)
-                              .map((y) =>
-                                  DropdownMenuItem(value: y, child: Text('$y')))
+                    if (_filtreModu == 'ay') ...[
+                      // Karşılaştırma yıl chip
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: List.generate(5, (i) => DateTime.now().year - i + 1)
+                              .reversed
+                              .map((y) => Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      label: Text('$y'),
+                                      selected: _karsilastirmaYil == y,
+                                      onSelected: (_) => setState(() => _karsilastirmaYil = y),
+                                      selectedColor: Colors.blueGrey[100],
+                                      labelStyle: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: _karsilastirmaYil == y
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: _karsilastirmaYil == y
+                                            ? Colors.blueGrey[800]
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ))
                               .toList(),
-                          onChanged: (v) =>
-                              setState(() => _karsilastirmaYil = v!),
-                        )),
-                      ]),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Karşılaştırma ay chip — tek seçim
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: List.generate(12, (i) {
+                          final ay = i + 1;
+                          return ChoiceChip(
+                            label: Text(_aylar[i].substring(0, 3)),
+                            selected: _karsilastirmaAy == ay,
+                            onSelected: (_) => setState(() => _karsilastirmaAy = ay),
+                            selectedColor: Colors.blueGrey[100],
+                            labelStyle: TextStyle(
+                              fontSize: 12,
+                              fontWeight: _karsilastirmaAy == ay
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: _karsilastirmaAy == ay
+                                  ? Colors.blueGrey[800]
+                                  : Colors.black87,
+                            ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_aylar[_karsilastirmaAy - 1]} $_karsilastirmaYil',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.blueGrey[600],
+                            fontWeight: FontWeight.w500),
+                      ),
+                    ],
                     if (_filtreModu == 'aralik')
                       Row(children: [
                         Expanded(
@@ -1517,7 +1652,9 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                       child: _ozet(
                     _kayitlar,
                     _filtreModu == 'ay'
-                        ? '${_aylar[_secilenAy - 1]} $_secilenYil'
+                        ? (_ilkAy == _sonAy
+                            ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                            : '${_aylar[_ilkAy - 1]}–${_aylar[_sonAy - 1]} $_secilenYil')
                         : 'Seçili Dönem',
                     const Color(0xFF0288D1),
                     gerceklesenGiderler: _gerceklesenGiderler,
@@ -1534,7 +1671,9 @@ class RaporlarWidgetState extends State<RaporlarWidget>
               _ozet(
                 _kayitlar,
                 _filtreModu == 'ay'
-                    ? '${_aylar[_secilenAy - 1]} $_secilenYil'
+                    ? (_ilkAy == _sonAy
+                        ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                        : '${_aylar[_ilkAy - 1]}–${_aylar[_sonAy - 1]} $_secilenYil')
                     : 'Seçili Dönem',
                 const Color(0xFF0288D1),
                 gerceklesenGiderler: _gerceklesenGiderler,
