@@ -12,6 +12,10 @@ class EkGiderSheet extends StatefulWidget {
   final List<Map<String, dynamic>> satirlar;
   final List<String> giderTurleri;
   final Future<void> Function(List<Map<String, dynamic>>) onKaydet;
+  // Envanter
+  final double oncekiEnvanter;
+  final double buAyEnvanter;
+  final Future<void> Function(double) onEnvanterKaydet;
 
   const EkGiderSheet({
     required this.subeAd,
@@ -19,6 +23,9 @@ class EkGiderSheet extends StatefulWidget {
     required this.satirlar,
     required this.giderTurleri,
     required this.onKaydet,
+    required this.oncekiEnvanter,
+    required this.buAyEnvanter,
+    required this.onEnvanterKaydet,
   });
 
   @override
@@ -28,11 +35,30 @@ class EkGiderSheet extends StatefulWidget {
 class EkGiderSheetState extends State<EkGiderSheet> {
   late List<Map<String, dynamic>> _satirlar;
   bool _kaydediliyor = false;
+  late TextEditingController _envanterCtrl;
+
+  double get _oncekiEnvanter => widget.oncekiEnvanter;
+
+  double get _buAyEnvanter {
+    final tStr = _envanterCtrl.text.trim();
+    return double.tryParse(tStr.replaceAll('.', '').replaceAll(',', '.')) ?? 0.0;
+  }
+
+  double get _envanterFarki => _buAyEnvanter - _oncekiEnvanter;
 
   @override
   void initState() {
     super.initState();
     _satirlar = widget.satirlar;
+    _envanterCtrl = TextEditingController(
+      text: widget.buAyEnvanter > 0 ? _fmtTutar(widget.buAyEnvanter) : '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _envanterCtrl.dispose();
+    super.dispose();
   }
 
   String _fmtTutar(double v) {
@@ -87,7 +113,11 @@ class EkGiderSheetState extends State<EkGiderSheet> {
       };
     }).toList();
 
-    await widget.onKaydet(kaydedilecek);
+    // Envanter ve giderleri paralel kaydet
+    await Future.wait([
+      widget.onKaydet(kaydedilecek),
+      widget.onEnvanterKaydet(_buAyEnvanter),
+    ]);
   }
 
   @override
@@ -205,9 +235,121 @@ class EkGiderSheetState extends State<EkGiderSheet> {
                   horizontal: 16,
                   vertical: 4,
                 ),
-                itemCount: _satirlar.length + 1, // +1 ekle butonu için
+                itemCount: _satirlar.length + 2, // +1 ekle butonu, +1 envanter
                 itemBuilder: (_, idx) {
-                  // Son item = Ekle butonu
+                  // Son item = Envanter bölümü
+                  if (idx == _satirlar.length + 1) {
+                    final fark = _envanterFarki;
+                    final farkRenk = fark > 0
+                        ? Colors.green[700]!
+                        : fark < 0
+                            ? Colors.red[700]!
+                            : Colors.grey[600]!;
+                    final farkIkon = fark > 0 ? '+' : '';
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F7FF),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF0288D1).withOpacity(0.3)),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.inventory_2_outlined,
+                                  size: 16, color: Color(0xFF0288D1)),
+                              const SizedBox(width: 6),
+                              const Text('Envanter',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0288D1))),
+                            ]),
+                            const SizedBox(height: 10),
+                            // Önceki ay — readonly
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Önceki Ay Kalan',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.grey[600])),
+                                Text(
+                                  _oncekiEnvanter > 0
+                                      ? '${_fmtTutar(_oncekiEnvanter)} ₺'
+                                      : '—',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700]),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Bu ay — girilebilir
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text('Bu Ay Kalan',
+                                      style: TextStyle(
+                                          fontSize: 12, color: Colors.grey[600])),
+                                ),
+                                SizedBox(
+                                  width: 140,
+                                  child: TextFormField(
+                                    controller: _envanterCtrl,
+                                    decoration: const InputDecoration(
+                                      hintText: '0,00',
+                                      suffixText: '₺',
+                                      border: OutlineInputBorder(),
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 8),
+                                      isDense: true,
+                                    ),
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true),
+                                    inputFormatters: [BinAraciFormatter()],
+                                    textAlign: TextAlign.right,
+                                    onChanged: (_) => setState(() {}),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Fark satırı — sadece değer girilmişse göster
+                            if (_buAyEnvanter > 0 || _oncekiEnvanter > 0) ...[
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 6),
+                                child: Divider(height: 1),
+                              ),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text('Fark (Net Kara Dahil)',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: farkRenk)),
+                                  Text(
+                                    '$farkIkon${_fmtTutar(fark.abs())} ₺',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: farkRenk),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  // Özel Gider Ekle butonu
                   if (idx == _satirlar.length) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),

@@ -168,6 +168,15 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         _secilenSube != null ? [_secilenSube!] : _subeAdlari.keys.toList();
     final donemKey = bas.substring(0, 7); // 'YYYY-MM'
 
+    // Önceki ay key hesapla
+    final donemParts = donemKey.split('-');
+    final donemYil = int.parse(donemParts[0]);
+    final donemAy = int.parse(donemParts[1]);
+    final oncekiYil = donemAy == 1 ? donemYil - 1 : donemYil;
+    final oncekiAy = donemAy == 1 ? 12 : donemAy - 1;
+    final oncekiDonemKey =
+        '${oncekiYil.toString().padLeft(4, '0')}-${oncekiAy.toString().padLeft(2, '0')}';
+
     // Tüm şubeler paralel
     final futures = hedefSubeler.map((subeId) async {
       final results = await Future.wait([
@@ -182,10 +191,15 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
             .collection('gerceklesen_giderler')
             .doc('${subeId}_$donemKey')
             .get(),
+        FirebaseFirestore.instance
+            .collection('gerceklesen_giderler')
+            .doc('${subeId}_$oncekiDonemKey')
+            .get(),
       ]);
 
       final snap = results[0] as QuerySnapshot<Map<String, dynamic>>;
       final ekGiderDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
+      final oncekiDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
 
       double ciro = 0, harcama = 0;
       for (final doc in snap.docs) {
@@ -206,6 +220,10 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
 
       final ekGiderler =
           (ekGiderDoc.data()?['giderler'] as List?)?.cast<Map>() ?? [];
+      final buAyEnvanter =
+          (ekGiderDoc.data()?['envanterKalani'] as num? ?? 0).toDouble();
+      final oncekiEnvanter =
+          (oncekiDoc.data()?['envanterKalani'] as num? ?? 0).toDouble();
 
       return {
         'subeId': subeId,
@@ -215,6 +233,8 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         'ekGiderler': ekGiderler,
         'donemKey': donemKey,
         'detayAcik': false,
+        'buAyEnvanter': buAyEnvanter,
+        'oncekiEnvanter': oncekiEnvanter,
       };
     });
 
@@ -256,7 +276,20 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
     await FirebaseFirestore.instance
         .collection('gerceklesen_giderler')
         .doc('${subeId}_$donemKey')
-        .set({'subeId': subeId, 'donem': donemKey, 'giderler': giderler});
+        .set({'subeId': subeId, 'donem': donemKey, 'giderler': giderler},
+            SetOptions(merge: true));
+  }
+
+  Future<void> _envanterKaydet(
+    String subeId,
+    String donemKey,
+    double tutar,
+  ) async {
+    await FirebaseFirestore.instance
+        .collection('gerceklesen_giderler')
+        .doc('${subeId}_$donemKey')
+        .set({'subeId': subeId, 'donem': donemKey, 'envanterKalani': tutar},
+            SetOptions(merge: true));
   }
 
   // Ek gider düzenleme diyaloğu
@@ -314,10 +347,16 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         donemKey: donemKey,
         satirlar: satirlar,
         giderTurleri: _giderTurleri,
+        oncekiEnvanter: v['oncekiEnvanter'] as double? ?? 0.0,
+        buAyEnvanter: v['buAyEnvanter'] as double? ?? 0.0,
         onKaydet: (kaydedilecek) async {
           await _ekGiderKaydet(subeId, donemKey, kaydedilecek);
           setState(() => v['ekGiderler'] = kaydedilecek);
           Navigator.pop(ctx);
+        },
+        onEnvanterKaydet: (yeniDeger) async {
+          await _envanterKaydet(subeId, donemKey, yeniDeger);
+          setState(() => v['buAyEnvanter'] = yeniDeger);
         },
       ),
     );
@@ -364,8 +403,13 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
       0.0,
       (s, g) => s + ((g['tutar'] as num?) ?? 0).toDouble(),
     );
+    final buAyEnvanter = (v['buAyEnvanter'] as double? ?? 0.0);
+    final oncekiEnvanter = (v['oncekiEnvanter'] as double? ?? 0.0);
+    final envanterFarki = (buAyEnvanter > 0 || oncekiEnvanter > 0)
+        ? buAyEnvanter - oncekiEnvanter
+        : 0.0;
     final toplamGider = harcama + ekToplam;
-    final kar = ciro - toplamGider;
+    final kar = ciro - toplamGider + envanterFarki;
 
     // Karşılaştırma
     double? karKarsilastirma;
@@ -485,6 +529,13 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                       -ekToplam,
                       Colors.red[700]!,
                       bold: true,
+                    ),
+                  if (envanterFarki != 0)
+                    _satirKalem(
+                      'Envanter Farkı',
+                      envanterFarki,
+                      envanterFarki > 0 ? Colors.teal[700]! : Colors.orange[800]!,
+                      bold: false,
                     ),
                   const Divider(height: 12),
                   Container(
