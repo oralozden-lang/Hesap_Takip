@@ -106,6 +106,12 @@ class RaporlarWidgetState extends State<RaporlarWidget>
   Map<String, List<Map<String, dynamic>>> _gerceklesenGiderlerKarsilastirma =
       {};
 
+  // subeId → envanterKalani (bu dönem ve önceki dönem)
+  Map<String, double> _envanterler = {};
+  Map<String, double> _oncekiEnvanterler = {};
+  Map<String, double> _envanterlerKarsilastirma = {};
+  Map<String, double> _oncekiEnvanterlerKarsilastirma = {};
+
   bool _ozetDetayAcik = false;
   bool _siralamaArtan = false;
 
@@ -183,6 +189,13 @@ class RaporlarWidgetState extends State<RaporlarWidget>
       final hedefSubeler =
           _secilenSubeler.isEmpty ? _aktifSubeler : _secilenSubeler.toList();
       final donemKey = _baslangicKey().substring(0, 7);
+      final oncekiDonemKey = _oncekiAyKey(donemKey);
+
+      // Karşılaştırma dönemi envanter için de önceki ay lazım
+      final karsilastirmaDonemKey =
+          _karsilastirmaAcik ? _karsilastirmaBas().substring(0, 7) : '';
+      final karsilastirmaOncekiKey =
+          _karsilastirmaAcik ? _oncekiAyKey(karsilastirmaDonemKey) : '';
 
       // ── Tüm sorgular tek seferde paralel ──────────────────────────────
       final futures = <Future>[
@@ -193,10 +206,19 @@ class RaporlarWidgetState extends State<RaporlarWidget>
           Future.value(<Map<String, dynamic>>[]),
         _gerceklesenGiderlerCek(hedefSubeler, donemKey),
         if (_karsilastirmaAcik)
-          _gerceklesenGiderlerCek(
-              hedefSubeler, _karsilastirmaBas().substring(0, 7))
+          _gerceklesenGiderlerCek(hedefSubeler, karsilastirmaDonemKey)
         else
           Future.value(<String, List<Map<String, dynamic>>>{}),
+        _envanterlerCek(hedefSubeler, donemKey),
+        _envanterlerCek(hedefSubeler, oncekiDonemKey),
+        if (_karsilastirmaAcik)
+          _envanterlerCek(hedefSubeler, karsilastirmaDonemKey)
+        else
+          Future.value(<String, double>{}),
+        if (_karsilastirmaAcik)
+          _envanterlerCek(hedefSubeler, karsilastirmaOncekiKey)
+        else
+          Future.value(<String, double>{}),
       ];
 
       final results = await Future.wait(futures);
@@ -210,6 +232,14 @@ class RaporlarWidgetState extends State<RaporlarWidget>
             results[2] as Map<String, List<Map<String, dynamic>>>;
         _gerceklesenGiderlerKarsilastirma = _karsilastirmaAcik
             ? results[3] as Map<String, List<Map<String, dynamic>>>
+            : {};
+        _envanterler = results[4] as Map<String, double>;
+        _oncekiEnvanterler = results[5] as Map<String, double>;
+        _envanterlerKarsilastirma = _karsilastirmaAcik
+            ? results[6] as Map<String, double>
+            : {};
+        _oncekiEnvanterlerKarsilastirma = _karsilastirmaAcik
+            ? results[7] as Map<String, double>
             : {};
         _yukleniyor = false;
       });
@@ -241,6 +271,40 @@ class RaporlarWidgetState extends State<RaporlarWidget>
       }),
     );
     return Map.fromEntries(entries);
+  }
+
+  /// Şube bazlı envanterKalani değerlerini paralel çeker
+  Future<Map<String, double>> _envanterlerCek(
+    List<String> subeIdsler,
+    String donemKey,
+  ) async {
+    final entries = await Future.wait(
+      subeIdsler.map((subeId) async {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('gerceklesen_giderler')
+              .doc('${subeId}_$donemKey')
+              .get();
+          return MapEntry(
+            subeId,
+            (doc.data()?['envanterKalani'] as num? ?? 0).toDouble(),
+          );
+        } catch (_) {
+          return MapEntry(subeId, 0.0);
+        }
+      }),
+    );
+    return Map.fromEntries(entries);
+  }
+
+  /// Verilen donemKey'den bir önceki ayın key'ini döndürür
+  String _oncekiAyKey(String donemKey) {
+    final parts = donemKey.split('-');
+    final yil = int.parse(parts[0]);
+    final ay = int.parse(parts[1]);
+    final oncekiYil = ay == 1 ? yil - 1 : yil;
+    final oncekiAy = ay == 1 ? 12 : ay - 1;
+    return '${oncekiYil.toString().padLeft(4, '0')}-${oncekiAy.toString().padLeft(2, '0')}';
   }
 
   Future<List<Map<String, dynamic>>> _veriCek(String bas, String bit) async {
@@ -332,6 +396,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     bool detayAcik = false,
     VoidCallback? onDetayToggle,
     bool merkziGiderGor = true,
+    Map<String, double> envanterler = const {},
+    Map<String, double> oncekiEnvanterler = const {},
   }) {
     if (kayitlar.isEmpty) return const SizedBox.shrink();
     final satis = _topla(kayitlar, 'gunlukSatisToplami');
@@ -606,11 +672,41 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                         toplamGider += (g['tutar'] as num? ?? 0).toDouble();
                       }
                     }
-                    final netKar = satis - toplamGider;
+                    // Envanter farkı hesapla (tüm şubelerin toplamı)
+                    final buAyEnvToplam =
+                        envanterler.values.fold(0.0, (s, v) => s + v);
+                    final oncekiEnvToplam =
+                        oncekiEnvanterler.values.fold(0.0, (s, v) => s + v);
+                    final envanterFarki =
+                        (buAyEnvToplam > 0 || oncekiEnvToplam > 0)
+                            ? buAyEnvToplam - oncekiEnvToplam
+                            : 0.0;
+                    final netKar = satis - toplamGider + envanterFarki;
                     return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           const Divider(),
+                          // Envanter satırları — sadece veri varsa göster
+                          if (envanterFarki != 0) ...[
+                            _satirOzet(
+                              'Önceki Ay Envanteri',
+                              oncekiEnvToplam,
+                              Colors.blueGrey[400]!,
+                            ),
+                            _satirOzet(
+                              'Bu Ay Envanteri',
+                              buAyEnvToplam,
+                              Colors.blueGrey[600]!,
+                            ),
+                            _satirOzet(
+                              'Envanter Farkı',
+                              envanterFarki,
+                              envanterFarki > 0
+                                  ? Colors.teal[700]!
+                                  : Colors.orange[800]!,
+                            ),
+                            const Divider(),
+                          ],
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 6),
@@ -1413,6 +1509,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                     Colors.blueGrey[600]!,
                     gerceklesenGiderler: _gerceklesenGiderlerKarsilastirma,
                     merkziGiderGor: widget.merkziGiderGor,
+                    envanterler: _envanterlerKarsilastirma,
+                    oncekiEnvanterler: _oncekiEnvanterlerKarsilastirma,
                   )),
                   const SizedBox(width: 8),
                   Expanded(
@@ -1427,6 +1525,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                     onDetayToggle: () =>
                         setState(() => _ozetDetayAcik = !_ozetDetayAcik),
                     merkziGiderGor: widget.merkziGiderGor,
+                    envanterler: _envanterler,
+                    oncekiEnvanterler: _oncekiEnvanterler,
                   )),
                 ],
               )
@@ -1442,6 +1542,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                 onDetayToggle: () =>
                     setState(() => _ozetDetayAcik = !_ozetDetayAcik),
                 merkziGiderGor: widget.merkziGiderGor,
+                envanterler: _envanterler,
+                oncekiEnvanterler: _oncekiEnvanterler,
               ),
             const SizedBox(height: 8),
             _aramaSection(),
