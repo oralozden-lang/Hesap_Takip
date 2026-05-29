@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'ek_gider_sheet.dart';
+import 'ay_yil_secici.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +21,7 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   // ── Filtre durumu ──────────────────────────────────────────────────────────
   String _filtreModu = 'ay'; // 'ay' veya 'aralik'
   int _secilenYil = DateTime.now().year;
-  int _secilenAy = DateTime.now().month;
+  Set<int> _secilenAylar = {DateTime.now().month};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
   String? _secilenSube; // null = tüm şubeler
@@ -30,7 +31,6 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
       DateTime.now().month == 1 ? DateTime.now().year - 1 : DateTime.now().year;
   int _karsilastirmaAy =
       DateTime.now().month == 1 ? 12 : DateTime.now().month - 1;
-  // Karşılaştırma tarih aralığı
   DateTime _karsilastirmaBaslangic = DateTime(
     DateTime.now().month == 1 ? DateTime.now().year - 1 : DateTime.now().year,
     DateTime.now().month == 1 ? 12 : DateTime.now().month - 1,
@@ -41,6 +41,13 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
     DateTime.now().month == 1 ? 13 : DateTime.now().month,
     0,
   );
+
+  int get _ilkAy => _secilenAylar.isEmpty
+      ? DateTime.now().month
+      : _secilenAylar.reduce((a, b) => a < b ? a : b);
+  int get _sonAy => _secilenAylar.isEmpty
+      ? DateTime.now().month
+      : _secilenAylar.reduce((a, b) => a > b ? a : b);
 
   // ── Veri ──────────────────────────────────────────────────────────────────
   bool _yukleniyor = false;
@@ -131,15 +138,15 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
 
   String _baslangicKey() {
     if (_filtreModu == 'ay') {
-      return '$_secilenYil-${_secilenAy.toString().padLeft(2, '0')}-01';
+      return '$_secilenYil-${_ilkAy.toString().padLeft(2, '0')}-01';
     }
     return '${_baslangic.year}-${_baslangic.month.toString().padLeft(2, '0')}-${_baslangic.day.toString().padLeft(2, '0')}';
   }
 
   String _bitisKey() {
     if (_filtreModu == 'ay') {
-      final son = DateTime(_secilenYil, _secilenAy + 1, 0).day;
-      return '$_secilenYil-${_secilenAy.toString().padLeft(2, '0')}-${son.toString().padLeft(2, '0')}';
+      final son = DateTime(_secilenYil, _sonAy + 1, 0).day;
+      return '$_secilenYil-${_sonAy.toString().padLeft(2, '0')}-${son.toString().padLeft(2, '0')}';
     }
     return '${_bitis.year}-${_bitis.month.toString().padLeft(2, '0')}-${_bitis.day.toString().padLeft(2, '0')}';
   }
@@ -168,15 +175,6 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         _secilenSube != null ? [_secilenSube!] : _subeAdlari.keys.toList();
     final donemKey = bas.substring(0, 7); // 'YYYY-MM'
 
-    // Önceki ay key hesapla
-    final donemParts = donemKey.split('-');
-    final donemYil = int.parse(donemParts[0]);
-    final donemAy = int.parse(donemParts[1]);
-    final oncekiYil = donemAy == 1 ? donemYil - 1 : donemYil;
-    final oncekiAy = donemAy == 1 ? 12 : donemAy - 1;
-    final oncekiDonemKey =
-        '${oncekiYil.toString().padLeft(4, '0')}-${oncekiAy.toString().padLeft(2, '0')}';
-
     // Tüm şubeler paralel
     final futures = hedefSubeler.map((subeId) async {
       final results = await Future.wait([
@@ -191,15 +189,10 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
             .collection('gerceklesen_giderler')
             .doc('${subeId}_$donemKey')
             .get(),
-        FirebaseFirestore.instance
-            .collection('gerceklesen_giderler')
-            .doc('${subeId}_$oncekiDonemKey')
-            .get(),
       ]);
 
       final snap = results[0] as QuerySnapshot<Map<String, dynamic>>;
       final ekGiderDoc = results[1] as DocumentSnapshot<Map<String, dynamic>>;
-      final oncekiDoc = results[2] as DocumentSnapshot<Map<String, dynamic>>;
 
       double ciro = 0, harcama = 0;
       for (final doc in snap.docs) {
@@ -220,10 +213,6 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
 
       final ekGiderler =
           (ekGiderDoc.data()?['giderler'] as List?)?.cast<Map>() ?? [];
-      final buAyEnvanter =
-          (ekGiderDoc.data()?['envanterKalani'] as num? ?? 0).toDouble();
-      final oncekiEnvanter =
-          (oncekiDoc.data()?['envanterKalani'] as num? ?? 0).toDouble();
 
       return {
         'subeId': subeId,
@@ -233,8 +222,6 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         'ekGiderler': ekGiderler,
         'donemKey': donemKey,
         'detayAcik': false,
-        'buAyEnvanter': buAyEnvanter,
-        'oncekiEnvanter': oncekiEnvanter,
       };
     });
 
@@ -276,20 +263,7 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
     await FirebaseFirestore.instance
         .collection('gerceklesen_giderler')
         .doc('${subeId}_$donemKey')
-        .set({'subeId': subeId, 'donem': donemKey, 'giderler': giderler},
-            SetOptions(merge: true));
-  }
-
-  Future<void> _envanterKaydet(
-    String subeId,
-    String donemKey,
-    double tutar,
-  ) async {
-    await FirebaseFirestore.instance
-        .collection('gerceklesen_giderler')
-        .doc('${subeId}_$donemKey')
-        .set({'subeId': subeId, 'donem': donemKey, 'envanterKalani': tutar},
-            SetOptions(merge: true));
+        .set({'subeId': subeId, 'donem': donemKey, 'giderler': giderler});
   }
 
   // Ek gider düzenleme diyaloğu
@@ -347,16 +321,10 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
         donemKey: donemKey,
         satirlar: satirlar,
         giderTurleri: _giderTurleri,
-        oncekiEnvanter: v['oncekiEnvanter'] as double? ?? 0.0,
-        buAyEnvanter: v['buAyEnvanter'] as double? ?? 0.0,
         onKaydet: (kaydedilecek) async {
           await _ekGiderKaydet(subeId, donemKey, kaydedilecek);
           setState(() => v['ekGiderler'] = kaydedilecek);
           Navigator.pop(ctx);
-        },
-        onEnvanterKaydet: (yeniDeger) async {
-          await _envanterKaydet(subeId, donemKey, yeniDeger);
-          setState(() => v['buAyEnvanter'] = yeniDeger);
         },
       ),
     );
@@ -403,13 +371,8 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
       0.0,
       (s, g) => s + ((g['tutar'] as num?) ?? 0).toDouble(),
     );
-    final buAyEnvanter = (v['buAyEnvanter'] as double? ?? 0.0);
-    final oncekiEnvanter = (v['oncekiEnvanter'] as double? ?? 0.0);
-    final envanterFarki = (buAyEnvanter > 0 || oncekiEnvanter > 0)
-        ? buAyEnvanter - oncekiEnvanter
-        : 0.0;
     final toplamGider = harcama + ekToplam;
-    final kar = ciro - toplamGider + envanterFarki;
+    final kar = ciro - toplamGider;
 
     // Karşılaştırma
     double? karKarsilastirma;
@@ -529,13 +492,6 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                       -ekToplam,
                       Colors.red[700]!,
                       bold: true,
-                    ),
-                  if (envanterFarki != 0)
-                    _satirKalem(
-                      'Envanter Farkı',
-                      envanterFarki,
-                      envanterFarki > 0 ? Colors.teal[700]! : Colors.orange[800]!,
-                      bold: false,
                     ),
                   const Divider(height: 12),
                   Container(
@@ -776,7 +732,9 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   Widget build(BuildContext context) {
     super.build(context); // AutomaticKeepAliveClientMixin
     final donemBaslik = _filtreModu == 'ay'
-        ? '${_aylar[_secilenAy - 1]} $_secilenYil'
+        ? (_ilkAy == _sonAy
+            ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+            : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil')
         : '${_baslangic.day}.${_baslangic.month}.${_baslangic.year}'
             ' — ${_bitis.day}.${_bitis.month}.${_bitis.year}';
 
@@ -813,46 +771,12 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                   const SizedBox(height: 12),
 
                   if (_filtreModu == 'ay') ...[
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _secilenAy,
-                            decoration: const InputDecoration(
-                              labelText: 'Ay',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: List.generate(
-                              12,
-                              (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text(_aylar[i]),
-                              ),
-                            ),
-                            onChanged: (v) => setState(() => _secilenAy = v!),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            value: _secilenYil,
-                            decoration: const InputDecoration(
-                              labelText: 'Yıl',
-                              border: OutlineInputBorder(),
-                            ),
-                            items:
-                                List.generate(5, (i) => DateTime.now().year - i)
-                                    .map(
-                                      (y) => DropdownMenuItem(
-                                        value: y,
-                                        child: Text('$y'),
-                                      ),
-                                    )
-                                    .toList(),
-                            onChanged: (v) => setState(() => _secilenYil = v!),
-                          ),
-                        ),
-                      ],
+                    AyYilSecici(
+                      secilenYil: _secilenYil,
+                      secilenAylar: _secilenAylar,
+                      multiSelect: true,
+                      onYilDegisti: (y) => setState(() => _secilenYil = y),
+                      onAylarDegisti: (a) => setState(() => _secilenAylar = a),
                     ),
                   ] else ...[
                     Row(
@@ -958,52 +882,19 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                     },
                   ),
                   if (_karsilastirmaAcik) ...[
-                    if (_filtreModu == 'ay')
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<int>(
-                              value: _karsilastirmaAy,
-                              decoration: const InputDecoration(
-                                labelText: 'Karş. Ay',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: List.generate(
-                                12,
-                                (i) => DropdownMenuItem(
-                                  value: i + 1,
-                                  child: Text(_aylar[i]),
-                                ),
-                              ),
-                              onChanged: (v) =>
-                                  setState(() => _karsilastirmaAy = v!),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: DropdownButtonFormField<int>(
-                              value: _karsilastirmaYil,
-                              decoration: const InputDecoration(
-                                labelText: 'Karş. Yıl',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: List.generate(
-                                5,
-                                (i) => DateTime.now().year - i,
-                              )
-                                  .map(
-                                    (y) => DropdownMenuItem(
-                                      value: y,
-                                      child: Text('$y'),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _karsilastirmaYil = v!),
-                            ),
-                          ),
-                        ],
+                    if (_filtreModu == 'ay') ...[
+                      const SizedBox(height: 4),
+                      AyYilSecici(
+                        secilenYil: _karsilastirmaYil,
+                        secilenAylar: {_karsilastirmaAy},
+                        multiSelect: false,
+                        renk: Colors.blueGrey,
+                        onYilDegisti: (y) =>
+                            setState(() => _karsilastirmaYil = y),
+                        onAylarDegisti: (a) =>
+                            setState(() => _karsilastirmaAy = a.first),
                       ),
+                    ],
                     if (_filtreModu == 'aralik') ...[
                       const SizedBox(height: 6),
                       Row(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'ay_yil_secici.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -417,65 +417,39 @@ class ProjeksiyonWidgetState extends State<ProjeksiyonWidget>
         children: [
           Card(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: DropdownButtonFormField<int>(
-                      value: _secilenAy,
-                      isDense: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Ay',
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  AyYilSecici(
+                    secilenYil: _secilenYil,
+                    secilenAylar: {_secilenAy},
+                    multiSelect: false,
+                    onYilDegisti: (y) => setState(() => _secilenYil = y),
+                    onAylarDegisti: (a) =>
+                        setState(() => _secilenAy = a.first),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton(
+                        onPressed: _yukle,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0288D1),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                        child: const Text('Göster'),
                       ),
-                      items: List.generate(
-                          12,
-                          (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text(_aylar[i],
-                                    style: const TextStyle(fontSize: 13)),
-                              )),
-                      onChanged: (v) => setState(() => _secilenAy = v!),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 90,
-                    child: DropdownButtonFormField<int>(
-                      value: _secilenYil,
-                      isDense: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Yıl',
-                        border: OutlineInputBorder(),
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 20),
+                        tooltip: 'Yenile',
+                        onPressed: _yukle,
                       ),
-                      items: List.generate(3, (i) => DateTime.now().year - i)
-                          .map((y) => DropdownMenuItem(
-                              value: y,
-                              child: Text('$y',
-                                  style: const TextStyle(fontSize: 13))))
-                          .toList(),
-                      onChanged: (v) => setState(() => _secilenYil = v!),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _yukle,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0288D1),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                    ),
-                    child: const Text('Göster'),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, size: 20),
-                    tooltip: 'Yenile',
-                    onPressed: _yukle,
+                    ],
                   ),
                 ],
               ),
