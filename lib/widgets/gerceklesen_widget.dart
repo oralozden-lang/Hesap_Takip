@@ -24,7 +24,7 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   Set<int> _secilenAylar = {DateTime.now().month};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
-  String? _secilenSube; // null = tüm şubeler
+  Set<String> _secilenSubeler = {}; // boş = tüm şubeler
   bool _donemAcik = false;
   bool _subeSecimAcik = false;
   bool _karsilastirmaDonemAcik = false;
@@ -51,6 +51,9 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   int get _sonAy => _secilenAylar.isEmpty
       ? DateTime.now().month
       : _secilenAylar.reduce((a, b) => a > b ? a : b);
+  List<int> get _siraliAylar =>
+      (_secilenAylar.isEmpty ? List.generate(12, (i) => i + 1) : _secilenAylar.toList())
+        ..sort();
 
   // ── Veri ──────────────────────────────────────────────────────────────────
   bool _yukleniyor = false;
@@ -175,7 +178,7 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
     String bit,
   ) async {
     final hedefSubeler =
-        _secilenSube != null ? [_secilenSube!] : _subeAdlari.keys.toList();
+        _secilenSubeler.isEmpty ? _subeAdlari.keys.toList() : _secilenSubeler.toList();
     final donemKey = bas.substring(0, 7); // 'YYYY-MM'
 
     // Önceki ay key
@@ -258,9 +261,13 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   Future<void> _yukle() async {
     setState(() => _yukleniyor = true);
     try {
-      // Ana dönem ve karşılaştırma dönemini paralel çek
+      // Ay modunda bağımsız seçim varsa çoklu sorgu kullan
+      final anaVeri = _filtreModu == 'ay'
+          ? _kasaVeriCekCokluAy(_siraliAylar, _secilenYil)
+          : _kasaVeriCek(_baslangicKey(), _bitisKey());
+
       final results = await Future.wait([
-        _kasaVeriCek(_baslangicKey(), _bitisKey()),
+        anaVeri,
         if (_karsilastirmaAcik)
           _kasaVeriCek(_karsilastirmaBasKey(), _karsilastirmaBitKey())
         else
@@ -275,6 +282,61 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
     } catch (e) {
       if (mounted) setState(() => _yukleniyor = false);
     }
+  }
+
+  /// Bağımsız ay seçimi için her ay ayrı sorgu çalıştırır, birleştirir
+  Future<List<Map<String, dynamic>>> _kasaVeriCekCokluAy(
+      List<int> aylar, int yil) async {
+    final futures = aylar.map((ay) {
+      final bas =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-01';
+      final sonGun = DateTime(yil, ay + 1, 0).day;
+      final bit =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
+      return _kasaVeriCek(bas, bit);
+    });
+    final results = await Future.wait(futures);
+    // Her şube için sonuçları birleştir — aynı subeId'yi topla
+    final subeMap = <String, Map<String, dynamic>>{};
+    for (final ayVeriler in results) {
+      for (final v in ayVeriler) {
+        final subeId = v['subeId'] as String;
+        if (!subeMap.containsKey(subeId)) {
+          subeMap[subeId] = Map<String, dynamic>.from(v);
+        } else {
+          // Ciro ve harcama topla, giderler birleştir
+          subeMap[subeId]!['ciro'] =
+              (subeMap[subeId]!['ciro'] as double) + (v['ciro'] as double);
+          subeMap[subeId]!['harcama'] =
+              (subeMap[subeId]!['harcama'] as double) + (v['harcama'] as double);
+          final mevcutGiderler =
+              List<Map>.from(subeMap[subeId]!['ekGiderler'] as List);
+          final yeniGiderler = List<Map>.from(v['ekGiderler'] as List);
+          // Aynı ad varsa tutarları topla, yoksa ekle
+          for (final g in yeniGiderler) {
+            final idx = mevcutGiderler.indexWhere((m) => m['ad'] == g['ad']);
+            if (idx >= 0) {
+              mevcutGiderler[idx] = {
+                'ad': g['ad'],
+                'tutar': (mevcutGiderler[idx]['tutar'] as num).toDouble() +
+                    (g['tutar'] as num).toDouble(),
+              };
+            } else {
+              mevcutGiderler.add(g);
+            }
+          }
+          subeMap[subeId]!['ekGiderler'] = mevcutGiderler;
+          // Envanter: son ayın değeri (aylar sıralı geldiğinden son üzerine yaz)
+          if ((v['buAyEnvanter'] as double) > 0) {
+            subeMap[subeId]!['buAyEnvanter'] = v['buAyEnvanter'];
+          }
+        }
+      }
+    }
+    final sonuc = subeMap.values.toList();
+    sonuc.sort(
+        (a, b) => (a['subeAd'] as String).compareTo(b['subeAd'] as String));
+    return sonuc;
   }
 
   // Ek gider kaydet
@@ -845,14 +907,100 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                     ),
                     const SizedBox(height: 10),
                     if (_filtreModu == 'ay') ...[
-                      AyYilSecici(
-                        secilenYil: _secilenYil,
-                        secilenAylar: _secilenAylar,
-                        multiSelect: true,
-                        onYilDegisti: (y) => setState(() => _secilenYil = y),
-                        onAylarDegisti: (a) =>
-                            setState(() => _secilenAylar = a),
+                      // Yıl chip satırı
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: List.generate(5, (i) => DateTime.now().year - i + 1)
+                              .reversed
+                              .map((y) => Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      label: Text('$y'),
+                                      selected: _secilenYil == y,
+                                      onSelected: (_) =>
+                                          setState(() => _secilenYil = y),
+                                      selectedColor: const Color(0xFF0288D1)
+                                          .withOpacity(0.18),
+                                      checkmarkColor: const Color(0xFF0288D1),
+                                      labelStyle: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: _secilenYil == y
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: _secilenYil == y
+                                            ? const Color(0xFF0288D1)
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ))
+                              .toList(),
+                        ),
                       ),
+                      const SizedBox(height: 8),
+                      // Ay chip — bağımsız çoklu seçim
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          FilterChip(
+                            label: const Text('Tümü',
+                                style: TextStyle(fontSize: 12)),
+                            selected: _secilenAylar.isEmpty ||
+                                _secilenAylar.length == 12,
+                            onSelected: (_) =>
+                                setState(() => _secilenAylar.clear()),
+                            selectedColor:
+                                const Color(0xFF0288D1).withOpacity(0.18),
+                            checkmarkColor: const Color(0xFF0288D1),
+                          ),
+                          ...List.generate(12, (i) {
+                            final ay = i + 1;
+                            final tumSecili = _secilenAylar.isEmpty ||
+                                _secilenAylar.length == 12;
+                            final secili =
+                                tumSecili || _secilenAylar.contains(ay);
+                            return FilterChip(
+                              label: Text(_aylar[i].substring(0, 3),
+                                  style: const TextStyle(fontSize: 12)),
+                              selected: secili,
+                              onSelected: (v) {
+                                setState(() {
+                                  if (tumSecili) {
+                                    _secilenAylar = {ay};
+                                  } else if (v) {
+                                    _secilenAylar.add(ay);
+                                    if (_secilenAylar.length == 12)
+                                      _secilenAylar.clear();
+                                  } else {
+                                    _secilenAylar.remove(ay);
+                                  }
+                                });
+                              },
+                              selectedColor:
+                                  const Color(0xFF0288D1).withOpacity(0.18),
+                              checkmarkColor: const Color(0xFF0288D1),
+                            );
+                          }),
+                        ],
+                      ),
+                      if (_secilenAylar.isNotEmpty &&
+                          _secilenAylar.length < 12) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _secilenAylar.length == 1
+                              ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                              : (_siraliAylar
+                                      .map((a) =>
+                                          _aylar[a - 1].substring(0, 3))
+                                      .join(', ') +
+                                  ' $_secilenYil'),
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF0288D1),
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ] else ...[
                       Row(
                         children: [
@@ -920,9 +1068,11 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _secilenSube == null
+                              _secilenSubeler.isEmpty
                                   ? 'Tümü'
-                                  : _subeAdlari[_secilenSube] ?? _secilenSube!,
+                                  : _secilenSubeler
+                                      .map((s) => _subeAdlari[s] ?? s)
+                                      .join(', '),
                               style: const TextStyle(fontSize: 13),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -944,18 +1094,23 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                         children: [
                           FilterChip(
                             label: const Text('Tümü'),
-                            selected: _secilenSube == null,
+                            selected: _secilenSubeler.isEmpty,
                             onSelected: (_) =>
-                                setState(() => _secilenSube = null),
+                                setState(() => _secilenSubeler.clear()),
                             selectedColor:
                                 const Color(0xFF0288D1).withOpacity(0.18),
                             checkmarkColor: const Color(0xFF0288D1),
                           ),
                           ..._subeAdlari.entries.map((e) => FilterChip(
                                 label: Text(e.value),
-                                selected: _secilenSube == e.key,
-                                onSelected: (_) =>
-                                    setState(() => _secilenSube = e.key),
+                                selected: _secilenSubeler.contains(e.key),
+                                onSelected: (secildi) => setState(() {
+                                  if (secildi) {
+                                    _secilenSubeler.add(e.key);
+                                  } else {
+                                    _secilenSubeler.remove(e.key);
+                                  }
+                                }),
                                 selectedColor:
                                     const Color(0xFF0288D1).withOpacity(0.18),
                                 checkmarkColor: const Color(0xFF0288D1),

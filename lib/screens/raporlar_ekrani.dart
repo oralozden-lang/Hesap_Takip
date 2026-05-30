@@ -75,7 +75,7 @@ class RaporlarWidgetState extends State<RaporlarWidget>
 
   String _filtreModu = 'ay';
   int _secilenYil = DateTime.now().year;
-  // Çoklu ay seçimi — ardışık zorunlu, Set yerine List (sıra önemli değil, min/max alınır)
+  // Çoklu ay seçimi — bağımsız (ardışık zorunluluk yok), boş = tümü
   Set<int> _secilenAylar = {DateTime.now().month};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
@@ -191,21 +191,23 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     try {
       final hedefSubeler =
           _secilenSubeler.isEmpty ? _aktifSubeler : _secilenSubeler.toList();
-      // Merkezi giderler için ilk ayın key'i (tek ay veya çok ay başlangıcı)
       final donemKey = _baslangicKey().substring(0, 7);
-      // Envanter: son seçilen ay vs ilk seçilen ayın öncesi
       final envanterKey = _filtreModu == 'ay' ? _envanterDonemKey : '';
       final envanterOncekiKey = _filtreModu == 'ay' ? _envanterOncekiKey : '';
 
-      // Karşılaştırma dönemi
       final karsilastirmaDonemKey =
           _karsilastirmaAcik ? _karsilastirmaBas().substring(0, 7) : '';
       final karsilastirmaOncekiKey =
           _karsilastirmaAcik ? _oncekiAyKey(karsilastirmaDonemKey) : '';
 
+      // Ay modunda bağımsız seçim varsa çoklu sorgu kullan
+      final anaVeriGecisi = _filtreModu == 'ay'
+          ? _veriCekCokluAy(_siraliAylar, _secilenYil)
+          : _veriCek(_baslangicKey(), _bitisKey());
+
       // ── Tüm sorgular tek seferde paralel ──────────────────────────────
       final futures = <Future>[
-        _veriCek(_baslangicKey(), _bitisKey()),
+        anaVeriGecisi,
         if (_karsilastirmaAcik)
           _veriCek(_karsilastirmaBas(), _karsilastirmaBit())
         else
@@ -215,7 +217,6 @@ class RaporlarWidgetState extends State<RaporlarWidget>
           _gerceklesenGiderlerCek(hedefSubeler, karsilastirmaDonemKey)
         else
           Future.value(<String, List<Map<String, dynamic>>>{}),
-        // Envanter: sadece ay modunda çek
         if (_filtreModu == 'ay')
           _envanterlerCek(hedefSubeler, envanterKey)
         else
@@ -348,11 +349,47 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     return sonuc;
   }
 
+  /// Bağımsız (ardışık olmayan) ay seçimi için birden fazla sorgu çalıştırır,
+  /// sadece seçili aylara ait günlük kayıtları döndürür.
+  Future<List<Map<String, dynamic>>> _veriCekCokluAy(
+      List<int> aylar, int yil) async {
+    final hedefSubeler =
+        _secilenSubeler.isEmpty ? _aktifSubeler : _secilenSubeler.toList();
+    final futures = aylar.map((ay) {
+      final bas =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-01';
+      final sonGun = DateTime(yil, ay + 1, 0).day;
+      final bit =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
+      return _veriCek(bas, bit);
+    });
+    final results = await Future.wait(futures);
+    final sonuc = <Map<String, dynamic>>[];
+    for (final liste in results) sonuc.addAll(liste);
+    sonuc
+        .sort((a, b) => (a['tarih'] as String).compareTo(b['tarih'] as String));
+    return sonuc;
+  }
+
   // Çoklu ay seçiminde en küçük ve en büyük ayı döndürür
   int get _ilkAy =>
       _secilenAylar.isEmpty ? DateTime.now().month : _secilenAylar.reduce((a, b) => a < b ? a : b);
   int get _sonAy =>
       _secilenAylar.isEmpty ? DateTime.now().month : _secilenAylar.reduce((a, b) => a > b ? a : b);
+  List<int> get _siraliAylar =>
+      (_secilenAylar.isEmpty ? [DateTime.now().month] : _secilenAylar.toList())
+        ..sort();
+
+  // Seçili ayların birleşik başlık metni
+  String get _donemBaslikMetni {
+    if (_filtreModu != 'ay') {
+      return '${_baslangic.day.toString().padLeft(2,'0')}.${_baslangic.month.toString().padLeft(2,'0')}.${_baslangic.year} – ${_bitis.day.toString().padLeft(2,'0')}.${_bitis.month.toString().padLeft(2,'0')}.${_bitis.year}';
+    }
+    if (_secilenAylar.isEmpty || _secilenAylar.length == 12) return 'Tüm Aylar $_secilenYil';
+    if (_secilenAylar.length == 1) return '${_aylar[_ilkAy - 1]} $_secilenYil';
+    final sirali = _siraliAylar;
+    return sirali.map((a) => _aylar[a - 1].substring(0, 3)).join(', ') + ' $_secilenYil';
+  }
 
   String _baslangicKey() {
     if (_filtreModu == 'ay') {
@@ -369,7 +406,7 @@ class RaporlarWidgetState extends State<RaporlarWidget>
     return '${_bitis.year.toString().padLeft(4, '0')}-${_bitis.month.toString().padLeft(2, '0')}-${_bitis.day.toString().padLeft(2, '0')}';
   }
 
-  // Envanter için: son seçilen ay key'i ve onun önceki ayı
+  // Envanter: en son seçilen ayın key'i ve ilk seçilen ayın önceki ayı
   String get _envanterDonemKey =>
       '${_secilenYil.toString().padLeft(4, '0')}-${_sonAy.toString().padLeft(2, '0')}';
   String get _envanterOncekiKey => _oncekiAyKey(
@@ -1293,11 +1330,7 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _filtreModu == 'aralik'
-                                ? '${_baslangic.day.toString().padLeft(2, '0')}.${_baslangic.month.toString().padLeft(2, '0')}.${_baslangic.year} – ${_bitis.day.toString().padLeft(2, '0')}.${_bitis.month.toString().padLeft(2, '0')}.${_bitis.year}'
-                                : _ilkAy == _sonAy
-                                    ? '${_aylar[_ilkAy - 1]} $_secilenYil'
-                                    : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil',
+                            _donemBaslikMetni,
                             style: const TextStyle(fontSize: 13),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1362,7 +1395,7 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Ay chip — Tümü + 12 ay
+                    // Ay chip — Tümü + 12 ay (bağımsız seçim)
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -1370,54 +1403,33 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                         FilterChip(
                           label: const Text('Tümü',
                               style: TextStyle(fontSize: 12)),
-                          selected: _secilenAylar.length == 12,
-                          onSelected: (v) => setState(() {
-                            if (v) {
-                              _secilenAylar =
-                                  Set.from(List.generate(12, (i) => i + 1));
-                            } else {
-                              _secilenAylar = {_sonAy};
-                            }
-                          }),
+                          selected: _secilenAylar.isEmpty || _secilenAylar.length == 12,
+                          onSelected: (_) => setState(() => _secilenAylar.clear()),
                           selectedColor:
                               const Color(0xFF0288D1).withOpacity(0.18),
                           checkmarkColor: const Color(0xFF0288D1),
                         ),
                         ...List.generate(12, (i) {
                           final ay = i + 1;
-                          final secili = _secilenAylar.contains(ay);
-                          final aralik = _secilenAylar.isNotEmpty &&
-                              ay > _ilkAy &&
-                              ay < _sonAy;
+                          final tumSecili = _secilenAylar.isEmpty || _secilenAylar.length == 12;
+                          final secili = tumSecili || _secilenAylar.contains(ay);
                           return FilterChip(
                             label: Text(_aylar[i].substring(0, 3),
                                 style: TextStyle(fontSize: 12)),
-                            selected: secili || aralik,
-                            showCheckmark: !aralik,
+                            selected: secili,
                             onSelected: (v) {
                               setState(() {
-                                if (v) {
+                                if (tumSecili) {
+                                  // Tümü seçiliyken birine basılınca sadece o kalır
+                                  _secilenAylar = {ay};
+                                } else if (v) {
                                   _secilenAylar.add(ay);
-                                  final min = _secilenAylar
-                                      .reduce((a, b) => a < b ? a : b);
-                                  final max = _secilenAylar
-                                      .reduce((a, b) => a > b ? a : b);
-                                  _secilenAylar = Set.from(
-                                      List.generate(max - min + 1, (i) => min + i));
+                                  // Tüm aylar seçildiyse tümüne dön
+                                  if (_secilenAylar.length == 12) _secilenAylar.clear();
                                 } else {
-                                  if (_secilenAylar.length > 1) {
-                                    final min = _secilenAylar
-                                        .reduce((a, b) => a < b ? a : b);
-                                    final max = _secilenAylar
-                                        .reduce((a, b) => a > b ? a : b);
-                                    if (ay == min) {
-                                      _secilenAylar = Set.from(List.generate(
-                                          max - (min + 1) + 1, (i) => min + 1 + i));
-                                    } else if (ay == max) {
-                                      _secilenAylar = Set.from(List.generate(
-                                          (max - 1) - min + 1, (i) => min + i));
-                                    }
-                                  }
+                                  _secilenAylar.remove(ay);
+                                  // Hiç ay kalmadıysa tümüne dön
+                                  if (_secilenAylar.isEmpty) _secilenAylar.clear();
                                 }
                               });
                             },
@@ -1428,12 +1440,10 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                         }),
                       ],
                     ),
-                    if (_secilenAylar.isNotEmpty) ...[
+                    if (_secilenAylar.isNotEmpty && _secilenAylar.length < 12) ...[
                       const SizedBox(height: 6),
                       Text(
-                        _ilkAy == _sonAy
-                            ? '${_aylar[_ilkAy - 1]} $_secilenYil'
-                            : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil  (${_sonAy - _ilkAy + 1} ay)',
+                        _donemBaslikMetni,
                         style: const TextStyle(
                             fontSize: 12,
                             color: Color(0xFF0288D1),
