@@ -6693,22 +6693,29 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
 
   // Banka Parası = Brüt Satış - Sonuç toplamları (Pulse/MyDom sekmesinden)
   double get _bankaParasi {
-    // Pulse onaylanmamışsa Günlük Kasa ve Kasa Özeti'ne 0 aktar
+    // Pulse onaylanmamışsa 0 aktar
     if (!_pulseKontrolOnaylandi) return 0;
-    // Pulse sayfasında hesaplanan banka parasını kullan (Pulse verileri bazlı)
-    if (_pulseBankaParasi != 0)
-      return _pulseBankaParasi.clamp(0, double.infinity);
-    // Pulse verisi yoksa program değerlerinden hesapla
-    final brutSatis = _parseDouble(_gunlukSatisCtrl.text);
+
+    // Her zaman Pulse controller'larından anlık hesapla
+    // (_pulseBankaParasi postFrameCallback ile güncellenir,
+    //  otomatik kayıt tetiklenirken henüz 0 olabilir — yarış durumu)
+    final brutSatis = _pulseKiyasCtrl.containsKey('pulseBrut') &&
+            _pulseKiyasCtrl['pulseBrut']!.text.isNotEmpty
+        ? _parseDouble(_pulseKiyasCtrl['pulseBrut']!.text)
+        : _parseDouble(_gunlukSatisCtrl.text);
+
     if (brutSatis <= 0) return 0;
-    double toplamSonuc = _toplamPos;
-    for (var c in _yemekKartlari) {
-      toplamSonuc += _parseDouble(c.tutarCtrl.text);
+
+    double toplamPulse = 0;
+    for (final entry in _pulseKiyasCtrl.entries) {
+      if (entry.key == 'pulseBrut') continue;
+      if (entry.value.text.isEmpty) continue;
+      final ad = entry.key.toLowerCase();
+      if (ad.contains('brüt') || ad.contains('brut')) continue;
+      toplamPulse += _parseDouble(entry.value.text);
     }
-    for (var o in _onlineOdemeler) {
-      toplamSonuc += _parseDouble((o['ctrl'] as TextEditingController).text);
-    }
-    return (brutSatis - toplamSonuc).clamp(0, double.infinity);
+
+    return brutSatis - toplamPulse;
   }
 
   double get _toplamPos {
