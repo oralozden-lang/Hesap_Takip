@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'filtre_paneli.dart';
+import '../widgets/filtre_paneli.dart';
 import '../core/utils.dart';
 import '../widgets/sube_ozet_tablosu.dart';
 
