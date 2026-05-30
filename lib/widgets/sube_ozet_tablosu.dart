@@ -3,7 +3,7 @@ import '../excel_download.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-
+import 'filtre_paneli.dart';
 import '../core/utils.dart';
 
 class SubeOzetTablosu extends StatefulWidget {
@@ -18,7 +18,8 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
     with AutomaticKeepAliveClientMixin {
   String _filtreModu = 'ay';
   int _secilenYil = DateTime.now().year;
-  int _secilenAy = DateTime.now().month;
+  Set<int> _secilenAylar = {DateTime.now().month};
+  Set<String> _secilenSubeler = {};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
 
@@ -32,11 +33,20 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
     1,
   );
   DateTime _karsilastirmaBitis = DateTime(
-    DateTime.now().year,
     DateTime.now().month == 1 ? DateTime.now().year - 1 : DateTime.now().year,
-    DateTime.now().month == 1 ? 12 : DateTime.now().month - 1 + 1,
+    DateTime.now().month == 1 ? 13 : DateTime.now().month,
     0,
   );
+
+  int get _ilkAy => _secilenAylar.isEmpty
+      ? 1
+      : _secilenAylar.reduce((a, b) => a < b ? a : b);
+  int get _sonAy => _secilenAylar.isEmpty
+      ? 12
+      : _secilenAylar.reduce((a, b) => a > b ? a : b);
+  List<int> get _siraliAylar =>
+      (_secilenAylar.isEmpty ? List.generate(12, (i) => i + 1) : _secilenAylar.toList())
+        ..sort();
 
   bool _yukleniyor = false;
   Map<String, String> _subeAdlari = {};
@@ -108,14 +118,14 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
 
   String _baslangicKey() {
     if (_filtreModu == 'ay')
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_secilenAy.toString().padLeft(2, '0')}-01';
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_ilkAy.toString().padLeft(2, '0')}-01';
     return _tarihKey(_baslangic);
   }
 
   String _bitisKey() {
     if (_filtreModu == 'ay') {
-      final sonGun = DateTime(_secilenYil, _secilenAy + 1, 0).day;
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_secilenAy.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
+      final sonGun = DateTime(_secilenYil, _sonAy + 1, 0).day;
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_sonAy.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
     }
     return _tarihKey(_bitis);
   }
@@ -135,7 +145,10 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
   }
 
   Future<List<Map<String, dynamic>>> _veriCek(String bas, String bit) async {
-    final futures = _aktifSubeler.map((subeId) async {
+    final hedefSubeler = _secilenSubeler.isEmpty
+        ? _aktifSubeler
+        : _secilenSubeler.toList();
+    final futures = hedefSubeler.map((subeId) async {
       try {
         final snap = await FirebaseFirestore.instance
             .collection('subeler')
@@ -188,6 +201,36 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
     return List<Map<String, dynamic>>.from(await Future.wait(futures));
   }
 
+  Future<List<Map<String, dynamic>>> _veriCekCokluAy(
+      List<int> aylar, int yil) async {
+    final results = await Future.wait(aylar.map((ay) {
+      final bas =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-01';
+      final sonGun = DateTime(yil, ay + 1, 0).day;
+      final bit =
+          '${yil.toString().padLeft(4, '0')}-${ay.toString().padLeft(2, '0')}-${sonGun.toString().padLeft(2, '0')}';
+      return _veriCek(bas, bit);
+    }));
+    final subeMap = <String, Map<String, dynamic>>{};
+    for (final ayVeriler in results) {
+      for (final v in ayVeriler) {
+        final id = v['subeId'] as String;
+        if (!subeMap.containsKey(id)) {
+          subeMap[id] = Map<String, dynamic>.from(v);
+        } else {
+          subeMap[id]!['ciro'] =
+              (subeMap[id]!['ciro'] as double) + (v['ciro'] as double);
+          // Kasa bakiyesi: son ayın değeri (aylar sıralı)
+          subeMap[id]!['anaKasaTL'] = v['anaKasaTL'];
+          subeMap[id]!['anaKasaUSD'] = v['anaKasaUSD'];
+          subeMap[id]!['anaKasaEUR'] = v['anaKasaEUR'];
+          subeMap[id]!['anaKasaGBP'] = v['anaKasaGBP'];
+        }
+      }
+    }
+    return subeMap.values.toList();
+  }
+
   Future<void> _yukle() async {
     if (!mounted) return;
     setState(() => _yukleniyor = true);
@@ -203,9 +246,12 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
     if (!mounted) return;
     setState(() => _yukleniyor = true);
     try {
-      // Ana veri + karşılaştırma + KDV aynı anda
+      final anaVeri = _filtreModu == 'ay'
+          ? _veriCekCokluAy(_siraliAylar, _secilenYil)
+          : _veriCek(_baslangicKey(), _bitisKey());
+
       final results = await Future.wait([
-        _veriCek(_baslangicKey(), _bitisKey()),
+        anaVeri,
         if (_karsilastirmaAcik)
           _veriCek(_karsilastirmaBasKey(), _karsilastirmaBitKey())
         else
@@ -395,218 +441,63 @@ class SubeOzetTablosuState extends State<SubeOzetTablosu>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                          value: 'ay',
-                          label: Text('Ay Seç'),
-                          icon: Icon(Icons.calendar_month)),
-                      ButtonSegment(
-                          value: 'aralik',
-                          label: Text('Tarih Aralığı'),
-                          icon: Icon(Icons.date_range)),
-                    ],
-                    selected: {_filtreModu},
-                    onSelectionChanged: (s) =>
-                        setState(() => _filtreModu = s.first),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_filtreModu == 'ay') ...[
-                    Row(children: [
-                      Expanded(
-                          child: DropdownButtonFormField<int>(
-                        value: _secilenAy,
-                        decoration: const InputDecoration(
-                            labelText: 'Ay', border: OutlineInputBorder()),
-                        items: List.generate(
-                            12,
-                            (i) => DropdownMenuItem(
-                                value: i + 1, child: Text(_aylar[i]))),
-                        onChanged: (v) => setState(() => _secilenAy = v!),
-                      )),
-                      const SizedBox(width: 8),
-                      Expanded(
-                          child: DropdownButtonFormField<int>(
-                        value: _secilenYil,
-                        decoration: const InputDecoration(
-                            labelText: 'Yıl', border: OutlineInputBorder()),
-                        items: List.generate(5, (i) => DateTime.now().year - i)
-                            .map((y) =>
-                                DropdownMenuItem(value: y, child: Text('$y')))
-                            .toList(),
-                        onChanged: (v) => setState(() => _secilenYil = v!),
-                      )),
-                    ]),
-                  ] else ...[
-                    Row(children: [
-                      Expanded(
-                          child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final p = await showDatePicker(
-                              context: context,
-                              initialDate: _baslangic,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now());
-                          if (p != null) setState(() => _baslangic = p);
-                        },
-                        icon: const Icon(Icons.calendar_today, size: 16),
-                        label: Text(
-                            '${_baslangic.day.toString().padLeft(2, '0')}.${_baslangic.month.toString().padLeft(2, '0')}.${_baslangic.year}'),
-                      )),
-                      const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8),
-                          child: Text('—')),
-                      Expanded(
-                          child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final p = await showDatePicker(
-                              context: context,
-                              initialDate: _bitis,
-                              firstDate: _baslangic,
-                              lastDate: DateTime.now());
-                          if (p != null) setState(() => _bitis = p);
-                        },
-                        icon: const Icon(Icons.calendar_today, size: 16),
-                        label: Text(
-                            '${_bitis.day.toString().padLeft(2, '0')}.${_bitis.month.toString().padLeft(2, '0')}.${_bitis.year}'),
-                      )),
-                    ]),
-                  ],
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Önceki Dönemle Karşılaştır'),
-                    value: _karsilastirmaAcik,
-                    activeColor: const Color(0xFF0288D1),
-                    onChanged: (v) {
-                      setState(() {
-                        _karsilastirmaAcik = v;
-                        if (v) {
-                          final simdi = DateTime.now();
-                          final oncekiAy =
-                              simdi.month == 1 ? 12 : simdi.month - 1;
-                          final oncekiYil =
-                              simdi.month == 1 ? simdi.year - 1 : simdi.year;
-                          _karsilastirmaAy = oncekiAy;
-                          _karsilastirmaYil = oncekiYil;
-                          _karsilastirmaBaslangic =
-                              DateTime(oncekiYil, oncekiAy, 1);
-                          _karsilastirmaBitis =
-                              DateTime(oncekiYil, oncekiAy + 1, 0);
-                        }
-                      });
-                    },
-                  ),
-                  if (_karsilastirmaAcik) ...[
-                    const SizedBox(height: 8),
-                    if (_filtreModu == 'ay')
-                      Row(children: [
-                        Expanded(
-                            child: DropdownButtonFormField<int>(
-                          value: _karsilastirmaAy,
-                          decoration: const InputDecoration(
-                              labelText: 'Karş. Ay',
-                              border: OutlineInputBorder()),
-                          items: List.generate(
-                              12,
-                              (i) => DropdownMenuItem(
-                                  value: i + 1, child: Text(_aylar[i]))),
-                          onChanged: (v) =>
-                              setState(() => _karsilastirmaAy = v!),
-                        )),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: DropdownButtonFormField<int>(
-                          value: _karsilastirmaYil,
-                          decoration: const InputDecoration(
-                              labelText: 'Karş. Yıl',
-                              border: OutlineInputBorder()),
-                          items: List.generate(
-                                  5, (i) => DateTime.now().year - i)
-                              .map((y) =>
-                                  DropdownMenuItem(value: y, child: Text('$y')))
-                              .toList(),
-                          onChanged: (v) =>
-                              setState(() => _karsilastirmaYil = v!),
-                        )),
-                      ]),
-                    if (_filtreModu == 'aralik')
-                      Row(children: [
-                        Expanded(
-                            child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final p = await showDatePicker(
-                                context: context,
-                                initialDate: _karsilastirmaBaslangic,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime.now());
-                            if (p != null)
-                              setState(() => _karsilastirmaBaslangic = p);
-                          },
-                          icon: const Icon(Icons.calendar_today, size: 16),
-                          label: Text(
-                              '${_karsilastirmaBaslangic.day.toString().padLeft(2, '0')}.${_karsilastirmaBaslangic.month.toString().padLeft(2, '0')}.${_karsilastirmaBaslangic.year}'),
-                        )),
-                        const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text('—')),
-                        Expanded(
-                            child: OutlinedButton.icon(
-                          onPressed: () async {
-                            final p = await showDatePicker(
-                                context: context,
-                                initialDate: _karsilastirmaBitis,
-                                firstDate: _karsilastirmaBaslangic,
-                                lastDate: DateTime.now());
-                            if (p != null)
-                              setState(() => _karsilastirmaBitis = p);
-                          },
-                          icon: const Icon(Icons.calendar_today, size: 16),
-                          label: Text(
-                              '${_karsilastirmaBitis.day.toString().padLeft(2, '0')}.${_karsilastirmaBitis.month.toString().padLeft(2, '0')}.${_karsilastirmaBitis.year}'),
-                        )),
-                      ]),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                        child: ElevatedButton.icon(
-                      onPressed: _yukle,
-                      icon: _yukleniyor
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.search),
-                      label: const Text('Raporu Getir'),
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0288D1),
-                          foregroundColor: Colors.white),
-                    )),
-                    if (_subeVeriler.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: _excelIndir,
-                        icon: const Icon(Icons.table_chart, size: 18),
-                        label: const Text('Excel'),
-                        style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.green[700],
-                            side: BorderSide(color: Colors.green[700]!)),
-                      ),
-                    ],
-                  ]),
-                ],
-              ),
-            ),
+          FiltrePaneli(
+            secilenYil: _secilenYil,
+            secilenAylar: _secilenAylar,
+            filtreModu: _filtreModu,
+            baslangic: _baslangic,
+            bitis: _bitis,
+            onYilDegisti: (y) => setState(() => _secilenYil = y),
+            onAylarDegisti: (a) => setState(() => _secilenAylar = a),
+            onFiltreModu: (m) => setState(() => _filtreModu = m),
+            onBaslangicDegisti: (d) => setState(() => _baslangic = d),
+            onBitisDegisti: (d) => setState(() => _bitis = d),
+            subeler: _subeAdlari,
+            secilenSubeler: _secilenSubeler,
+            onSubelerDegisti: (s) => setState(() => _secilenSubeler = s),
+            karsilastirmaGoster: true,
+            karsilastirmaAcik: _karsilastirmaAcik,
+            karsilastirmaYil: _karsilastirmaYil,
+            karsilastirmaAy: _karsilastirmaAy,
+            karsilastirmaBaslangic: _karsilastirmaBaslangic,
+            karsilastirmaBitis: _karsilastirmaBitis,
+            onKarsilastirmaToggle: (v) {
+              setState(() {
+                _karsilastirmaAcik = v;
+                if (v) {
+                  final simdi = DateTime.now();
+                  final oncekiAy = simdi.month == 1 ? 12 : simdi.month - 1;
+                  final oncekiYil =
+                      simdi.month == 1 ? simdi.year - 1 : simdi.year;
+                  _karsilastirmaAy = oncekiAy;
+                  _karsilastirmaYil = oncekiYil;
+                  _karsilastirmaBaslangic = DateTime(oncekiYil, oncekiAy, 1);
+                  _karsilastirmaBitis = DateTime(oncekiYil, oncekiAy + 1, 0);
+                }
+              });
+            },
+            onKarsilastirmaYilDegisti: (y) =>
+                setState(() => _karsilastirmaYil = y),
+            onKarsilastirmaAyDegisti: (a) =>
+                setState(() => _karsilastirmaAy = a),
+            onKarsilastirmaBaslangicDegisti: (d) =>
+                setState(() => _karsilastirmaBaslangic = d),
+            onKarsilastirmaBitisDegisti: (d) =>
+                setState(() => _karsilastirmaBitis = d),
+            butonMetni: 'Raporu Getir',
+            onGoster: _veriYukleVeGuncelle,
           ),
+          if (_subeVeriler.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _excelIndir,
+              icon: const Icon(Icons.table_chart, size: 18),
+              label: const Text('Excel'),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green[700],
+                  side: BorderSide(color: Colors.green[700]!)),
+            ),
+          ],
           if (_subeVeriler.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Text('Ciro Sıralaması',

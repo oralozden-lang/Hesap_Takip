@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'ay_yil_secici.dart';
+import 'filtre_paneli.dart';
 import '../core/formatters.dart';
 import '../core/utils.dart';
 import 'gider_duzenle_sheet.dart';
@@ -415,45 +415,31 @@ class ProjeksiyonWidgetState extends State<ProjeksiyonWidget>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AyYilSecici(
-                    secilenYil: _secilenYil,
-                    secilenAylar: {_secilenAy},
-                    multiSelect: false,
-                    onYilDegisti: (y) => setState(() => _secilenYil = y),
-                    onAylarDegisti: (a) =>
-                        setState(() => _secilenAy = a.first),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      ElevatedButton(
-                        onPressed: _yukle,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0288D1),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                        ),
-                        child: const Text('Göster'),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, size: 20),
-                        tooltip: 'Yenile',
-                        onPressed: _yukle,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          FiltrePaneli(
+            secilenYil: _secilenYil,
+            secilenAylar: {_secilenAy},
+            filtreModu: 'ay',
+            baslangic: DateTime(_secilenYil, _secilenAy, 1),
+            bitis: DateTime(_secilenYil, _secilenAy + 1, 0),
+            onYilDegisti: (y) => setState(() => _secilenYil = y),
+            onAylarDegisti: (a) =>
+                setState(() => _secilenAy = a.isEmpty ? _secilenAy : a.first),
+            onFiltreModu: (_) {},
+            onBaslangicDegisti: (_) {},
+            onBitisDegisti: (_) {},
+            tarihAralikGoster: false,
+            subeler: const {},
+            secilenSubeler: const {},
+            subeGoster: false,
+            onSubelerDegisti: (_) {},
+            karsilastirmaGoster: false,
+            onKarsilastirmaToggle: (_) {},
+            onKarsilastirmaYilDegisti: (_) {},
+            onKarsilastirmaAyDegisti: (_) {},
+            onKarsilastirmaBaslangicDegisti: (_) {},
+            onKarsilastirmaBitisDegisti: (_) {},
+            butonMetni: 'Göster',
+            onGoster: _yukle,
           ),
           const SizedBox(height: 8),
           Text('$ay — Tahmin',

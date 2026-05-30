@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-
+import 'filtre_paneli.dart';
 import '../core/utils.dart';
 import '../widgets/sube_ozet_tablosu.dart';
 
@@ -2086,7 +2086,7 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
 
   String _filtreModu = 'ay';
   int _secilenYil = DateTime.now().year;
-  int _secilenAy = DateTime.now().month;
+  Set<int> _secilenAylar = {DateTime.now().month};
   DateTime _baslangic = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _bitis = DateTime.now();
   Set<String> _secilenSubeler = {};
@@ -2101,13 +2101,23 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
   );
   DateTime _karsilastirmaBitis = DateTime(
     DateTime.now().month == 1 ? DateTime.now().year - 1 : DateTime.now().year,
-    DateTime.now().month == 1 ? 12 : DateTime.now().month,
+    DateTime.now().month == 1 ? 13 : DateTime.now().month,
     0,
   );
   bool _siralamaArtan = false;
-  Set<String> _secilenKanalDocIds = {}; // boş = Tüm Yöntemler
+  Set<String> _secilenKanalDocIds = {};
   bool _subeSecimAcik = false;
   bool _kanalSecimAcik = false;
+
+  int get _ilkAy => _secilenAylar.isEmpty
+      ? 1
+      : _secilenAylar.reduce((a, b) => a < b ? a : b);
+  int get _sonAy => _secilenAylar.isEmpty
+      ? 12
+      : _secilenAylar.reduce((a, b) => a > b ? a : b);
+  List<int> get _siraliAylar =>
+      (_secilenAylar.isEmpty ? List.generate(12, (i) => i + 1) : _secilenAylar.toList())
+        ..sort();
 
   bool _yukleniyor = false;
   Map<String, String> _subeAdlari = {};
@@ -2190,15 +2200,15 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
 
   String _baslangicKey() {
     if (_filtreModu == 'ay') {
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_pad2(_secilenAy)}-01';
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_pad2(_ilkAy)}-01';
     }
     return '${_baslangic.year.toString().padLeft(4, '0')}-${_pad2(_baslangic.month)}-${_pad2(_baslangic.day)}';
   }
 
   String _bitisKey() {
     if (_filtreModu == 'ay') {
-      final sonGun = DateTime(_secilenYil, _secilenAy + 1, 0).day;
-      return '${_secilenYil.toString().padLeft(4, '0')}-${_pad2(_secilenAy)}-${_pad2(sonGun)}';
+      final sonGun = DateTime(_secilenYil, _sonAy + 1, 0).day;
+      return '${_secilenYil.toString().padLeft(4, '0')}-${_pad2(_sonAy)}-${_pad2(sonGun)}';
     }
     return '${_bitis.year.toString().padLeft(4, '0')}-${_pad2(_bitis.month)}-${_pad2(_bitis.day)}';
   }
@@ -2216,6 +2226,77 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
       return '${_karsilastirmaYil.toString().padLeft(4, '0')}-${_pad2(_karsilastirmaAy)}-${_pad2(sonGun)}';
     }
     return '${_karsilastirmaBitis.year.toString().padLeft(4, '0')}-${_pad2(_karsilastirmaBitis.month)}-${_pad2(_karsilastirmaBitis.day)}';
+  }
+
+  Widget _kanalSeciciWidget() {
+    return StatefulBuilder(builder: (context, setInner) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        GestureDetector(
+          onTap: () => setState(() => _kanalSecimAcik = !_kanalSecimAcik),
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black38),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(children: [
+              const Text('Ödeme Yöntemi',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _secilenKanalDocIds.isEmpty
+                      ? 'Tümü'
+                      : _secilenKanalDocIds
+                          .map((id) => _kanallar
+                              .firstWhere((k) => k['docId'] == id,
+                                  orElse: () => {'ad': id})['ad'] as String)
+                          .join(', '),
+                  style: const TextStyle(fontSize: 13),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(
+                  _kanalSecimAcik ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: Colors.black54),
+            ]),
+          ),
+        ),
+        if (_kanalSecimAcik) ...[
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              FilterChip(
+                label: const Text('Tümü'),
+                selected: _secilenKanalDocIds.isEmpty,
+                onSelected: (_) =>
+                    setState(() => _secilenKanalDocIds.clear()),
+                selectedColor: const Color(0xFF0288D1).withOpacity(0.18),
+                checkmarkColor: const Color(0xFF0288D1),
+              ),
+              ..._kanallar.map((k) => FilterChip(
+                    label: Text(k['ad'] as String),
+                    selected:
+                        _secilenKanalDocIds.contains(k['docId'] as String),
+                    onSelected: (v) => setState(() {
+                      if (v) {
+                        _secilenKanalDocIds.add(k['docId'] as String);
+                      } else {
+                        _secilenKanalDocIds.remove(k['docId'] as String);
+                      }
+                    }),
+                    selectedColor: const Color(0xFF0288D1).withOpacity(0.18),
+                    checkmarkColor: const Color(0xFF0288D1),
+                  )),
+            ],
+          ),
+        ],
+      ]);
+    });
   }
 
   String _fmtTarih(DateTime dt) =>
@@ -2267,8 +2348,12 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
       _karsilastirmaKayitlar = [];
     });
     try {
+      final anaVeri = _filtreModu == 'ay'
+          ? _veriCekCokluAy(_siraliAylar, _secilenYil)
+          : _veriCek(_baslangicKey(), _bitisKey());
+
       final futures = <Future>[
-        _veriCek(_baslangicKey(), _bitisKey()),
+        anaVeri,
         if (_karsilastirmaAcik)
           _veriCek(_karsilastirmaBas(), _karsilastirmaBit())
         else
@@ -2285,6 +2370,24 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
     } catch (e) {
       if (mounted) setState(() => _yukleniyor = false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _veriCekCokluAy(
+      List<int> aylar, int yil) async {
+    final futures = aylar.map((ay) {
+      final bas =
+          '${yil.toString().padLeft(4, '0')}-${_pad2(ay)}-01';
+      final sonGun = DateTime(yil, ay + 1, 0).day;
+      final bit =
+          '${yil.toString().padLeft(4, '0')}-${_pad2(ay)}-${_pad2(sonGun)}';
+      return _veriCek(bas, bit);
+    });
+    final results = await Future.wait(futures);
+    final birlesik = <Map<String, dynamic>>[];
+    for (final ayVeriler in results) {
+      birlesik.addAll(ayVeriler);
+    }
+    return birlesik;
   }
 
   double _parseFirestore(dynamic raw) {
@@ -2866,7 +2969,11 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
     super.build(context);
     final docIds = _secilenKanalDocIds;
     final baslikAna = _filtreModu == 'ay'
-        ? '${_aylar[_secilenAy - 1]} $_secilenYil'
+        ? (_secilenAylar.isEmpty || _secilenAylar.length == 12
+            ? 'Tüm Aylar $_secilenYil'
+            : _secilenAylar.length == 1
+                ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                : '${_siraliAylar.map((a) => _aylar[a - 1].substring(0, 3)).join(', ')} $_secilenYil')
         : 'Seçili Dönem';
     final baslikKars = _filtreModu == 'ay'
         ? '${_aylar[_karsilastirmaAy - 1]} $_karsilastirmaYil'
@@ -2875,321 +2982,39 @@ class _OdemeKanallariWidgetState extends State<OdemeKanallariWidget>
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(
-                      value: 'ay',
-                      label: Text('Ay Seç'),
-                      icon: Icon(Icons.calendar_month)),
-                  ButtonSegment(
-                      value: 'aralik',
-                      label: Text('Tarih Aralığı'),
-                      icon: Icon(Icons.date_range)),
-                ],
-                selected: {_filtreModu},
-                onSelectionChanged: (s) =>
-                    setState(() => _filtreModu = s.first),
-              ),
-              const SizedBox(height: 12),
-              if (_filtreModu == 'ay') ...[
-                Row(children: [
-                  Expanded(
-                      child: DropdownButtonFormField<int>(
-                    value: _secilenAy,
-                    decoration: const InputDecoration(
-                        labelText: 'Ay', border: OutlineInputBorder()),
-                    items: List.generate(
-                        12,
-                        (i) => DropdownMenuItem(
-                            value: i + 1, child: Text(_aylar[i]))),
-                    onChanged: (v) => setState(() => _secilenAy = v!),
-                  )),
-                  const SizedBox(width: 8),
-                  Expanded(
-                      child: DropdownButtonFormField<int>(
-                    value: _secilenYil,
-                    decoration: const InputDecoration(
-                        labelText: 'Yıl', border: OutlineInputBorder()),
-                    items: List.generate(5, (i) => DateTime.now().year - i)
-                        .map((y) => DropdownMenuItem(
-                            value: y, child: Text(y.toString())))
-                        .toList(),
-                    onChanged: (v) => setState(() => _secilenYil = v!),
-                  )),
-                ]),
-              ] else ...[
-                Row(children: [
-                  Expanded(
-                      child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final p = await showDatePicker(
-                          context: context,
-                          initialDate: _baslangic,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now());
-                      if (p != null) setState(() => _baslangic = p);
-                    },
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(_fmtTarih(_baslangic)),
-                  )),
-                  const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('—')),
-                  Expanded(
-                      child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final p = await showDatePicker(
-                          context: context,
-                          initialDate: _bitis,
-                          firstDate: _baslangic,
-                          lastDate: DateTime.now());
-                      if (p != null) setState(() => _bitis = p);
-                    },
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: Text(_fmtTarih(_bitis)),
-                  )),
-                ]),
-              ],
-              if (_aktifSubeler.length > 1) ...[
-                const SizedBox(height: 12),
-                // ── Şube seçici ──────────────────────────────────────────
-                GestureDetector(
-                  onTap: () =>
-                      setState(() => _subeSecimAcik = !_subeSecimAcik),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black38),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Row(children: [
-                      const Text('Şube',
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.black54)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _secilenSubeler.isEmpty
-                              ? 'Tümü'
-                              : _secilenSubeler
-                                  .map((s) => _subeAdlari[s] ?? s)
-                                  .join(', '),
-                          style: const TextStyle(fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Icon(
-                          _subeSecimAcik
-                              ? Icons.expand_less
-                              : Icons.expand_more,
-                          size: 18,
-                          color: Colors.black54),
-                    ]),
-                  ),
-                ),
-                if (_subeSecimAcik) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      FilterChip(
-                        label: const Text('Tümü'),
-                        selected: _secilenSubeler.isEmpty,
-                        onSelected: (_) =>
-                            setState(() => _secilenSubeler.clear()),
-                        selectedColor:
-                            const Color(0xFF0288D1).withOpacity(0.18),
-                        checkmarkColor: const Color(0xFF0288D1),
-                      ),
-                      ..._aktifSubeler.map((s) => FilterChip(
-                            label: Text(_subeAdlari[s] ?? s),
-                            selected: _secilenSubeler.contains(s),
-                            onSelected: (secildi) => setState(() {
-                              if (secildi) {
-                                _secilenSubeler.add(s);
-                              } else {
-                                _secilenSubeler.remove(s);
-                              }
-                            }),
-                            selectedColor:
-                                const Color(0xFF0288D1).withOpacity(0.18),
-                            checkmarkColor: const Color(0xFF0288D1),
-                          )),
-                    ],
-                  ),
-                ],
-              ],
-              const SizedBox(height: 12),
-              // ── Ödeme Yöntemi seçici ─────────────────────────────────
-              GestureDetector(
-                onTap: () =>
-                    setState(() => _kanalSecimAcik = !_kanalSecimAcik),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.black38),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(children: [
-                    const Text('Ödeme Yöntemi',
-                        style:
-                            TextStyle(fontSize: 12, color: Colors.black54)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _secilenKanalDocIds.isEmpty
-                            ? 'Tümü'
-                            : _secilenKanalDocIds
-                                .map((id) =>
-                                    _kanallar.firstWhere(
-                                        (k) => k['docId'] == id,
-                                        orElse: () =>
-                                            {'ad': id})['ad'] as String)
-                                .join(', '),
-                        style: const TextStyle(fontSize: 13),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Icon(
-                        _kanalSecimAcik
-                            ? Icons.expand_less
-                            : Icons.expand_more,
-                        size: 18,
-                        color: Colors.black54),
-                  ]),
-                ),
-              ),
-              if (_kanalSecimAcik) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    FilterChip(
-                      label: const Text('Tümü'),
-                      selected: _secilenKanalDocIds.isEmpty,
-                      onSelected: (_) =>
-                          setState(() => _secilenKanalDocIds.clear()),
-                      selectedColor:
-                          const Color(0xFF0288D1).withOpacity(0.18),
-                      checkmarkColor: const Color(0xFF0288D1),
-                    ),
-                    ..._kanallar.map((k) => FilterChip(
-                          label: Text(k['ad'] as String),
-                          selected: _secilenKanalDocIds
-                              .contains(k['docId'] as String),
-                          onSelected: (secildi) => setState(() {
-                            if (secildi) {
-                              _secilenKanalDocIds.add(k['docId'] as String);
-                            } else {
-                              _secilenKanalDocIds.remove(k['docId'] as String);
-                            }
-                          }),
-                          selectedColor:
-                              const Color(0xFF0288D1).withOpacity(0.18),
-                          checkmarkColor: const Color(0xFF0288D1),
-                        )),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 8),
-              SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Önceki Dönemle Karşılaştır'),
-                value: _karsilastirmaAcik,
-                activeColor: const Color(0xFF0288D1),
-                onChanged: (v) => setState(() => _karsilastirmaAcik = v),
-              ),
-              if (_karsilastirmaAcik) ...[
-                if (_filtreModu == 'ay')
-                  Row(children: [
-                    Expanded(
-                        child: DropdownButtonFormField<int>(
-                      value: _karsilastirmaAy,
-                      decoration: const InputDecoration(
-                          labelText: 'Karş. Ay', border: OutlineInputBorder()),
-                      items: List.generate(
-                          12,
-                          (i) => DropdownMenuItem(
-                              value: i + 1, child: Text(_aylar[i]))),
-                      onChanged: (v) => setState(() => _karsilastirmaAy = v!),
-                    )),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: DropdownButtonFormField<int>(
-                      value: _karsilastirmaYil,
-                      decoration: const InputDecoration(
-                          labelText: 'Karş. Yıl', border: OutlineInputBorder()),
-                      items: List.generate(5, (i) => DateTime.now().year - i)
-                          .map((y) => DropdownMenuItem(
-                              value: y, child: Text(y.toString())))
-                          .toList(),
-                      onChanged: (v) => setState(() => _karsilastirmaYil = v!),
-                    )),
-                  ])
-                else
-                  Row(children: [
-                    Expanded(
-                        child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final p = await showDatePicker(
-                            context: context,
-                            initialDate: _karsilastirmaBaslangic,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now());
-                        if (p != null)
-                          setState(() => _karsilastirmaBaslangic = p);
-                      },
-                      icon: const Icon(Icons.calendar_today, size: 16),
-                      label: Text(_fmtTarih(_karsilastirmaBaslangic)),
-                    )),
-                    const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text('—')),
-                    Expanded(
-                        child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final p = await showDatePicker(
-                            context: context,
-                            initialDate: _karsilastirmaBitis,
-                            firstDate: _karsilastirmaBaslangic,
-                            lastDate: DateTime.now());
-                        if (p != null) setState(() => _karsilastirmaBitis = p);
-                      },
-                      icon: const Icon(Icons.calendar_today, size: 16),
-                      label: Text(_fmtTarih(_karsilastirmaBitis)),
-                    )),
-                  ]),
-              ],
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _yukle,
-                  icon: _yukleniyor
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.search),
-                  label: const Text('Raporu Getir'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0288D1),
-                      foregroundColor: Colors.white),
-                ),
-              ),
-            ]),
-          ),
+        FiltrePaneli(
+          secilenYil: _secilenYil,
+          secilenAylar: _secilenAylar,
+          filtreModu: _filtreModu,
+          baslangic: _baslangic,
+          bitis: _bitis,
+          onYilDegisti: (y) => setState(() => _secilenYil = y),
+          onAylarDegisti: (a) => setState(() => _secilenAylar = a),
+          onFiltreModu: (m) => setState(() => _filtreModu = m),
+          onBaslangicDegisti: (d) => setState(() => _baslangic = d),
+          onBitisDegisti: (d) => setState(() => _bitis = d),
+          subeler: _subeAdlari,
+          secilenSubeler: _secilenSubeler,
+          subeGoster: _aktifSubeler.length > 1,
+          onSubelerDegisti: (s) => setState(() => _secilenSubeler = s),
+          karsilastirmaGoster: true,
+          karsilastirmaAcik: _karsilastirmaAcik,
+          karsilastirmaYil: _karsilastirmaYil,
+          karsilastirmaAy: _karsilastirmaAy,
+          karsilastirmaBaslangic: _karsilastirmaBaslangic,
+          karsilastirmaBitis: _karsilastirmaBitis,
+          onKarsilastirmaToggle: (v) => setState(() => _karsilastirmaAcik = v),
+          onKarsilastirmaYilDegisti: (y) =>
+              setState(() => _karsilastirmaYil = y),
+          onKarsilastirmaAyDegisti: (a) =>
+              setState(() => _karsilastirmaAy = a),
+          onKarsilastirmaBaslangicDegisti: (d) =>
+              setState(() => _karsilastirmaBaslangic = d),
+          onKarsilastirmaBitisDegisti: (d) =>
+              setState(() => _karsilastirmaBitis = d),
+          ekstraFiltre: _kanalSeciciWidget(),
+          butonMetni: 'Raporu Getir',
+          onGoster: _yukle,
         ),
         if (_kayitlar.isNotEmpty) ...[
           const SizedBox(height: 16),
