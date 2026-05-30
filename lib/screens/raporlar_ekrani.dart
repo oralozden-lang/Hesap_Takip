@@ -81,6 +81,8 @@ class RaporlarWidgetState extends State<RaporlarWidget>
   DateTime _bitis = DateTime.now();
   Set<String> _secilenSubeler = {};
   bool _subeSecimAcik = false;
+  bool _donemAcik = false;
+  bool _karsilastirmaDonemAcik = false;
 
   bool _karsilastirmaAcik = false;
   int _karsilastirmaYil = DateTime.now().year;
@@ -1272,24 +1274,63 @@ class RaporlarWidgetState extends State<RaporlarWidget>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                          value: 'ay',
-                          label: Text('Ay Seç'),
-                          icon: Icon(Icons.calendar_month)),
-                      ButtonSegment(
-                          value: 'aralik',
-                          label: Text('Tarih Aralığı'),
-                          icon: Icon(Icons.date_range)),
-                    ],
-                    selected: {_filtreModu},
-                    onSelectionChanged: (s) =>
-                        setState(() => _filtreModu = s.first),
+                  const SizedBox(height: 8),
+                  // ── Dönem seçim paneli ────────────────────────────────
+                  GestureDetector(
+                    onTap: () =>
+                        setState(() => _donemAcik = !_donemAcik),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black38),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(children: [
+                        const Text('Dönem',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.black54)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _filtreModu == 'aralik'
+                                ? '${_baslangic.day.toString().padLeft(2, '0')}.${_baslangic.month.toString().padLeft(2, '0')}.${_baslangic.year} – ${_bitis.day.toString().padLeft(2, '0')}.${_bitis.month.toString().padLeft(2, '0')}.${_bitis.year}'
+                                : _ilkAy == _sonAy
+                                    ? '${_aylar[_ilkAy - 1]} $_secilenYil'
+                                    : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil',
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                            _donemAcik
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            size: 18,
+                            color: Colors.black54),
+                      ]),
+                    ),
                   ),
-                  const SizedBox(height: 12),
+                  if (_donemAcik) ...[
+                    const SizedBox(height: 10),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(
+                            value: 'ay',
+                            label: Text('Ay Seç'),
+                            icon: Icon(Icons.calendar_month)),
+                        ButtonSegment(
+                            value: 'aralik',
+                            label: Text('Tarih Aralığı'),
+                            icon: Icon(Icons.date_range)),
+                      ],
+                      selected: {_filtreModu},
+                      onSelectionChanged: (s) =>
+                          setState(() => _filtreModu = s.first),
+                    ),
+                    const SizedBox(height: 10),
                   if (_filtreModu == 'ay') ...[
-                    // Yıl seçimi — chip
+                    // Yıl chip satırı
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Row(
@@ -1320,77 +1361,82 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                             .toList(),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    // Ay seçimi — çoklu chip, ardışık zorunlu
+                    const SizedBox(height: 8),
+                    // Ay chip — Tümü + 12 ay
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: List.generate(12, (i) {
-                        final ay = i + 1;
-                        final secili = _secilenAylar.contains(ay);
-                        // Seçili aralık içinde mi (min ile max arasında)?
-                        final aralik = _secilenAylar.isNotEmpty &&
-                            ay >= _ilkAy &&
-                            ay <= _sonAy;
-                        return FilterChip(
-                          label: Text(_aylar[i].substring(0, 3)),
-                          selected: secili || aralik,
-                          onSelected: (v) {
-                            setState(() {
-                              if (v) {
-                                _secilenAylar.add(ay);
-                                // Ardışık yap: min ile max arasındaki tüm ayları ekle
-                                final min = _secilenAylar
-                                    .reduce((a, b) => a < b ? a : b);
-                                final max = _secilenAylar
-                                    .reduce((a, b) => a > b ? a : b);
-                                _secilenAylar = Set.from(
-                                    List.generate(max - min + 1, (i) => min + i));
-                              } else {
-                                // Çıkarınca yine ardışık kal — sadece tek ay kalıyorsa izin ver
-                                if (_secilenAylar.length > 1) {
-                                  // En yakın uca kadar daralt
+                      children: [
+                        FilterChip(
+                          label: const Text('Tümü',
+                              style: TextStyle(fontSize: 12)),
+                          selected: _secilenAylar.length == 12,
+                          onSelected: (v) => setState(() {
+                            if (v) {
+                              _secilenAylar =
+                                  Set.from(List.generate(12, (i) => i + 1));
+                            } else {
+                              _secilenAylar = {_sonAy};
+                            }
+                          }),
+                          selectedColor:
+                              const Color(0xFF0288D1).withOpacity(0.18),
+                          checkmarkColor: const Color(0xFF0288D1),
+                        ),
+                        ...List.generate(12, (i) {
+                          final ay = i + 1;
+                          final secili = _secilenAylar.contains(ay);
+                          final aralik = _secilenAylar.isNotEmpty &&
+                              ay > _ilkAy &&
+                              ay < _sonAy;
+                          return FilterChip(
+                            label: Text(_aylar[i].substring(0, 3),
+                                style: TextStyle(fontSize: 12)),
+                            selected: secili || aralik,
+                            showCheckmark: !aralik,
+                            onSelected: (v) {
+                              setState(() {
+                                if (v) {
+                                  _secilenAylar.add(ay);
                                   final min = _secilenAylar
                                       .reduce((a, b) => a < b ? a : b);
                                   final max = _secilenAylar
                                       .reduce((a, b) => a > b ? a : b);
-                                  if (ay == min) {
-                                    _secilenAylar = Set.from(List.generate(
-                                        max - (min + 1) + 1, (i) => min + 1 + i));
-                                  } else if (ay == max) {
-                                    _secilenAylar = Set.from(List.generate(
-                                        (max - 1) - min + 1, (i) => min + i));
+                                  _secilenAylar = Set.from(
+                                      List.generate(max - min + 1, (i) => min + i));
+                                } else {
+                                  if (_secilenAylar.length > 1) {
+                                    final min = _secilenAylar
+                                        .reduce((a, b) => a < b ? a : b);
+                                    final max = _secilenAylar
+                                        .reduce((a, b) => a > b ? a : b);
+                                    if (ay == min) {
+                                      _secilenAylar = Set.from(List.generate(
+                                          max - (min + 1) + 1, (i) => min + 1 + i));
+                                    } else if (ay == max) {
+                                      _secilenAylar = Set.from(List.generate(
+                                          (max - 1) - min + 1, (i) => min + i));
+                                    }
                                   }
-                                  // Ortadan çıkarma engellenir (uc dışındakiler)
                                 }
-                              }
-                            });
-                          },
-                          selectedColor:
-                              const Color(0xFF0288D1).withOpacity(0.18),
-                          checkmarkColor: const Color(0xFF0288D1),
-                          labelStyle: TextStyle(
-                            fontSize: 12,
-                            fontWeight: (secili || aralik)
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: (secili || aralik)
-                                ? const Color(0xFF0288D1)
-                                : Colors.black87,
-                          ),
-                        );
-                      }),
+                              });
+                            },
+                            selectedColor:
+                                const Color(0xFF0288D1).withOpacity(0.18),
+                            checkmarkColor: const Color(0xFF0288D1),
+                          );
+                        }),
+                      ],
                     ),
-                    // Seçili dönem özeti
                     if (_secilenAylar.isNotEmpty) ...[
                       const SizedBox(height: 6),
                       Text(
                         _ilkAy == _sonAy
                             ? '${_aylar[_ilkAy - 1]} $_secilenYil'
                             : '${_aylar[_ilkAy - 1]} – ${_aylar[_sonAy - 1]} $_secilenYil  (${_sonAy - _ilkAy + 1} ay)',
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 12,
-                            color: const Color(0xFF0288D1),
+                            color: Color(0xFF0288D1),
                             fontWeight: FontWeight.w500),
                       ),
                     ],
@@ -1429,6 +1475,7 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                       )),
                     ]),
                   ],
+                  ], // _donemAcik
                   if (tumSubeler.length > 1) ...[
                     const SizedBox(height: 12),
                     GestureDetector(
@@ -1510,65 +1557,99 @@ class RaporlarWidgetState extends State<RaporlarWidget>
                   ),
                   if (_karsilastirmaAcik) ...[
                     if (_filtreModu == 'ay') ...[
-                      // Karşılaştırma yıl chip
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: List.generate(5, (i) => DateTime.now().year - i + 1)
-                              .reversed
-                              .map((y) => Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: ChoiceChip(
-                                      label: Text('$y'),
-                                      selected: _karsilastirmaYil == y,
-                                      onSelected: (_) => setState(() => _karsilastirmaYil = y),
-                                      selectedColor: Colors.blueGrey[100],
-                                      labelStyle: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: _karsilastirmaYil == y
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        color: _karsilastirmaYil == y
-                                            ? Colors.blueGrey[800]
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ))
-                              .toList(),
+                      const SizedBox(height: 4),
+                      GestureDetector(
+                        onTap: () => setState(() =>
+                            _karsilastirmaDonemAcik = !_karsilastirmaDonemAcik),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.black38),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(children: [
+                            Text('Karş. Dönem',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.black54)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${_aylar[_karsilastirmaAy - 1]} $_karsilastirmaYil',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            Icon(
+                                _karsilastirmaDonemAcik
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                                color: Colors.black54),
+                          ]),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      // Karşılaştırma ay chip — tek seçim
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        children: List.generate(12, (i) {
-                          final ay = i + 1;
-                          return ChoiceChip(
-                            label: Text(_aylar[i].substring(0, 3)),
-                            selected: _karsilastirmaAy == ay,
-                            onSelected: (_) => setState(() => _karsilastirmaAy = ay),
-                            selectedColor: Colors.blueGrey[100],
-                            labelStyle: TextStyle(
+                      if (_karsilastirmaDonemAcik) ...[
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: List.generate(5, (i) => DateTime.now().year - i + 1)
+                                .reversed
+                                .map((y) => Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: ChoiceChip(
+                                        label: Text('$y'),
+                                        selected: _karsilastirmaYil == y,
+                                        onSelected: (_) => setState(
+                                            () => _karsilastirmaYil = y),
+                                        selectedColor: Colors.blueGrey[100],
+                                        labelStyle: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: _karsilastirmaYil == y
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                          color: _karsilastirmaYil == y
+                                              ? Colors.blueGrey[800]
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: List.generate(12, (i) {
+                            final ay = i + 1;
+                            return ChoiceChip(
+                              label: Text(_aylar[i].substring(0, 3)),
+                              selected: _karsilastirmaAy == ay,
+                              onSelected: (_) =>
+                                  setState(() => _karsilastirmaAy = ay),
+                              selectedColor: Colors.blueGrey[100],
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                fontWeight: _karsilastirmaAy == ay
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _karsilastirmaAy == ay
+                                    ? Colors.blueGrey[800]
+                                    : Colors.black87,
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${_aylar[_karsilastirmaAy - 1]} $_karsilastirmaYil',
+                          style: TextStyle(
                               fontSize: 12,
-                              fontWeight: _karsilastirmaAy == ay
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: _karsilastirmaAy == ay
-                                  ? Colors.blueGrey[800]
-                                  : Colors.black87,
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${_aylar[_karsilastirmaAy - 1]} $_karsilastirmaYil',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blueGrey[600],
-                            fontWeight: FontWeight.w500),
-                      ),
+                              color: Colors.blueGrey[600],
+                              fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ],
                     if (_filtreModu == 'aralik')
                       Row(children: [
