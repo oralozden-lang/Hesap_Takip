@@ -776,7 +776,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           )
           .toList(),
       'toplamHarcama': _toplamHarcama,
-      'bankaParasi': _hesaplaBankaParasi(),
+      'bankaParasi': _pulseKontrolOnaylandi ? _pulseBankaParasi : 0,
       'banknotlar': {
         for (var b in _banknotlar)
           b.toString(): _parseInt(_banknotCtrl[b]!.text),
@@ -1613,11 +1613,10 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
       }
     }
     final bankaParasi = brutSatisProgram - toplamPulse;
-    // Günlük Kasa için banka parasını güncelle
+    // Günlük Kasa için banka parasını güncelle — postFrameCallback olmadan
+    // direkt set et ki otomatik kayıt tetiklenirse doğru değer yazsın
     if (_pulseBankaParasi != bankaParasi) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _pulseBankaParasi = bankaParasi);
-      });
+      _pulseBankaParasi = bankaParasi;
     }
 
     return Stack(
@@ -6099,25 +6098,10 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       _posKontrolOnaylandi = data['posKontrolOnaylandi'] == true;
       _posOkundu = data['posResmiOkundu'] == true;
 
-      // Banka parasını pulseKiyasVerileri'nden hesapla
-      // Firestore'a ayrıca kaydetmeye gerek yok — veriler zaten burada
-      if (_pulseKontrolOnaylandi && pulseKiyas.isNotEmpty) {
-        final brutSatis = _pulseKiyasCtrl.containsKey('pulseBrut') &&
-                _pulseKiyasCtrl['pulseBrut']!.text.isNotEmpty
-            ? _parseDouble(_pulseKiyasCtrl['pulseBrut']!.text)
-            : _parseDouble(_gunlukSatisCtrl.text);
-        double toplam = 0;
-        for (final e in _pulseKiyasCtrl.entries) {
-          if (e.key == 'pulseBrut') continue;
-          if (e.value.text.isEmpty) continue;
-          final ad = e.key.toLowerCase();
-          if (ad.contains('brüt') || ad.contains('brut')) continue;
-          toplam += _parseDouble(e.value.text);
-        }
-        _pulseBankaParasi = brutSatis - toplam;
-      } else {
-        _pulseBankaParasi = 0;
-      }
+      // Banka parasını doğrudan Firestore'daki bankaParasi alanından yükle
+      // Bu alan otomatik kayıt ve kapanış kaydında yazılıyor
+      _pulseBankaParasi =
+          (data['bankaParasi'] as num? ?? 0).toDouble();
       for (var e in myDomKiyas.entries) {
         _myDomKiyasCtrl.putIfAbsent(e.key, () => TextEditingController());
         _myDomKiyasCtrl[e.key]!.text = e.value.toString();
@@ -6713,31 +6697,8 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
 
   // Banka Parası = Brüt Satış - Sonuç toplamları (Pulse/MyDom sekmesinden)
   double get _bankaParasi {
-    // Pulse onaylanmamışsa 0 aktar
     if (!_pulseKontrolOnaylandi) return 0;
-    // _pulseBankaParasi yükleme sırasında pulseKiyasVerileri'nden hesaplanır,
-    // Pulse sayfasında veri değişince postFrameCallback ile güncellenir.
     return _pulseBankaParasi;
-  }
-
-  // Kayıt sırasında çağrılır — postFrameCallback beklenmeden
-  // doğrudan controller'lardan hesaplar (yarış durumu yok)
-  double _hesaplaBankaParasi() {
-    if (!_pulseKontrolOnaylandi) return 0;
-    final brutSatis = _pulseKiyasCtrl.containsKey('pulseBrut') &&
-            _pulseKiyasCtrl['pulseBrut']!.text.isNotEmpty
-        ? _parseDouble(_pulseKiyasCtrl['pulseBrut']!.text)
-        : _parseDouble(_gunlukSatisCtrl.text);
-    if (brutSatis <= 0) return 0;
-    double toplam = 0;
-    for (final e in _pulseKiyasCtrl.entries) {
-      if (e.key == 'pulseBrut') continue;
-      if (e.value.text.isEmpty) continue;
-      final ad = e.key.toLowerCase();
-      if (ad.contains('brüt') || ad.contains('brut')) continue;
-      toplam += _parseDouble(e.value.text);
-    }
-    return brutSatis - toplam;
   }
 
   double get _toplamPos {
@@ -7302,7 +7263,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
             )
             .toList(),
         'toplamHarcama': _toplamHarcama,
-        'bankaParasi': _hesaplaBankaParasi(),
+        'bankaParasi': _pulseKontrolOnaylandi ? _pulseBankaParasi : 0,
         'banknotlar': {
           for (var b in _banknotlar)
             b.toString(): _parseInt(_banknotCtrl[b]!.text),
