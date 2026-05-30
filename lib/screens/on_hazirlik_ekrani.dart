@@ -7302,6 +7302,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
             )
             .toList(),
         'toplamHarcama': _toplamHarcama,
+        'bankaParasi': _hesaplaBankaParasi(),
         'banknotlar': {
           for (var b in _banknotlar)
             b.toString(): _parseInt(_banknotCtrl[b]!.text),
