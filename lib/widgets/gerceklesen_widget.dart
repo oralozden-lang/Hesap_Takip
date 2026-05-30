@@ -476,7 +476,14 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
       (s, g) => s + ((g['tutar'] as num?) ?? 0).toDouble(),
     );
     final toplamGider = harcama + ekToplam;
-    final kar = ciro - toplamGider;
+
+    // Envanter farkı — sadece bu ay girilmişse dahil et
+    final buAyEnvanter = v['buAyEnvanter'] as double? ?? 0.0;
+    final oncekiEnvanter = v['oncekiEnvanter'] as double? ?? 0.0;
+    final envanterGirilmis = buAyEnvanter > 0;
+    final envanterFarki = envanterGirilmis ? buAyEnvanter - oncekiEnvanter : 0.0;
+
+    final kar = ciro - toplamGider + envanterFarki;
 
     // Karşılaştırma
     double? karKarsilastirma;
@@ -487,7 +494,10 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
             0.0,
             (s, g) => s + ((g['tutar'] as num?) ?? 0).toDouble(),
           );
-      karKarsilastirma = kCiro - kHarcama - kEk;
+      final kBuAyEnv = karsilastirma['buAyEnvanter'] as double? ?? 0.0;
+      final kOncekiEnv = karsilastirma['oncekiEnvanter'] as double? ?? 0.0;
+      final kEnvFarki = kBuAyEnv > 0 ? kBuAyEnv - kOncekiEnv : 0.0;
+      karKarsilastirma = kCiro - kHarcama - kEk + kEnvFarki;
     }
 
     final detayAcik = v['detayAcik'] as bool? ?? false;
@@ -597,6 +607,27 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
                       Colors.red[700]!,
                       bold: true,
                     ),
+                  // Envanter — sadece bu ay girilmişse göster
+                  if (envanterGirilmis) ...[
+                    _satirKalem(
+                      'Önceki Ay Envanteri',
+                      oncekiEnvanter,
+                      Colors.blueGrey[400]!,
+                    ),
+                    _satirKalem(
+                      'Bu Ay Envanteri',
+                      buAyEnvanter,
+                      Colors.blueGrey[600]!,
+                    ),
+                    _satirKalem(
+                      'Envanter Farkı',
+                      envanterFarki,
+                      envanterFarki >= 0
+                          ? Colors.teal[700]!
+                          : Colors.orange[800]!,
+                      bold: true,
+                    ),
+                  ],
                   const Divider(height: 12),
                   Container(
                     margin: const EdgeInsets.only(top: 4),
@@ -752,7 +783,7 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
   // Özet kart (tüm şubeler toplamı)
   Widget _toplamKart() {
     if (_subeVeriler.isEmpty) return const SizedBox.shrink();
-    double topCiro = 0, topHarcama = 0, topEk = 0;
+    double topCiro = 0, topHarcama = 0, topEk = 0, topEnvanterFarki = 0;
     for (final v in _subeVeriler) {
       topCiro += v['ciro'] as double;
       topHarcama += v['harcama'] as double;
@@ -760,8 +791,11 @@ class GerceklesenWidgetState extends State<GerceklesenWidget>
             0.0,
             (s, g) => s + ((g['tutar'] as num?) ?? 0).toDouble(),
           );
+      final buAyEnv = v['buAyEnvanter'] as double? ?? 0.0;
+      final oncekiEnv = v['oncekiEnvanter'] as double? ?? 0.0;
+      if (buAyEnv > 0) topEnvanterFarki += buAyEnv - oncekiEnv;
     }
-    final topKar = topCiro - topHarcama - topEk;
+    final topKar = topCiro - topHarcama - topEk + topEnvanterFarki;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
