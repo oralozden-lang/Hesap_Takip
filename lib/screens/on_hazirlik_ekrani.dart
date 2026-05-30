@@ -9235,7 +9235,7 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
   Widget _ekrandaGorunenNakitSection() {
     final banka = _bankaParasi;
     final pulseOnaylandi = _pulseKontrolOnaylandi;
-    final rawBanka = _pulseBankaParasi;
+    final rawBanka = banka; // getter'dan hesaplanan gerçek değer
     final negatif = pulseOnaylandi && rawBanka < 0;
 
     // Otomatik doldur — Banka Parası değişince ctrl'e yaz
