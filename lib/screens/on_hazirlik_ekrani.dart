@@ -776,7 +776,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           )
           .toList(),
       'toplamHarcama': _toplamHarcama,
-      'bankaParasi': _bankaParasi,
+      'bankaParasi': _hesaplaBankaParasi(),
       'banknotlar': {
         for (var b in _banknotlar)
           b.toString(): _parseInt(_banknotCtrl[b]!.text),
@@ -6098,6 +6098,26 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
       _myDomOkundu = data['myDomResmiOkundu'] == true;
       _posKontrolOnaylandi = data['posKontrolOnaylandi'] == true;
       _posOkundu = data['posResmiOkundu'] == true;
+
+      // Banka parasını pulseKiyasVerileri'nden hesapla
+      // Firestore'a ayrıca kaydetmeye gerek yok — veriler zaten burada
+      if (_pulseKontrolOnaylandi && pulseKiyas.isNotEmpty) {
+        final brutSatis = _pulseKiyasCtrl.containsKey('pulseBrut') &&
+                _pulseKiyasCtrl['pulseBrut']!.text.isNotEmpty
+            ? _parseDouble(_pulseKiyasCtrl['pulseBrut']!.text)
+            : _parseDouble(_gunlukSatisCtrl.text);
+        double toplam = 0;
+        for (final e in _pulseKiyasCtrl.entries) {
+          if (e.key == 'pulseBrut') continue;
+          if (e.value.text.isEmpty) continue;
+          final ad = e.key.toLowerCase();
+          if (ad.contains('brüt') || ad.contains('brut')) continue;
+          toplam += _parseDouble(e.value.text);
+        }
+        _pulseBankaParasi = brutSatis - toplam;
+      } else {
+        _pulseBankaParasi = 0;
+      }
       for (var e in myDomKiyas.entries) {
         _myDomKiyasCtrl.putIfAbsent(e.key, () => TextEditingController());
         _myDomKiyasCtrl[e.key]!.text = e.value.toString();
@@ -6695,27 +6715,29 @@ Sayılarda virgülü noktaya çevir. Kanal bulunamazsa listeye ekleme.""";
   double get _bankaParasi {
     // Pulse onaylanmamışsa 0 aktar
     if (!_pulseKontrolOnaylandi) return 0;
+    // _pulseBankaParasi yükleme sırasında pulseKiyasVerileri'nden hesaplanır,
+    // Pulse sayfasında veri değişince postFrameCallback ile güncellenir.
+    return _pulseBankaParasi;
+  }
 
-    // Her zaman Pulse controller'larından anlık hesapla
-    // (_pulseBankaParasi postFrameCallback ile güncellenir,
-    //  otomatik kayıt tetiklenirken henüz 0 olabilir — yarış durumu)
+  // Kayıt sırasında çağrılır — postFrameCallback beklenmeden
+  // doğrudan controller'lardan hesaplar (yarış durumu yok)
+  double _hesaplaBankaParasi() {
+    if (!_pulseKontrolOnaylandi) return 0;
     final brutSatis = _pulseKiyasCtrl.containsKey('pulseBrut') &&
             _pulseKiyasCtrl['pulseBrut']!.text.isNotEmpty
         ? _parseDouble(_pulseKiyasCtrl['pulseBrut']!.text)
         : _parseDouble(_gunlukSatisCtrl.text);
-
     if (brutSatis <= 0) return 0;
-
-    double toplamPulse = 0;
-    for (final entry in _pulseKiyasCtrl.entries) {
-      if (entry.key == 'pulseBrut') continue;
-      if (entry.value.text.isEmpty) continue;
-      final ad = entry.key.toLowerCase();
+    double toplam = 0;
+    for (final e in _pulseKiyasCtrl.entries) {
+      if (e.key == 'pulseBrut') continue;
+      if (e.value.text.isEmpty) continue;
+      final ad = e.key.toLowerCase();
       if (ad.contains('brüt') || ad.contains('brut')) continue;
-      toplamPulse += _parseDouble(entry.value.text);
+      toplam += _parseDouble(e.value.text);
     }
-
-    return brutSatis - toplamPulse;
+    return brutSatis - toplam;
   }
 
   double get _toplamPos {
