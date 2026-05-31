@@ -128,26 +128,6 @@ class _FiltrePaneliState extends State<FiltrePaneli> {
 
   String _pad(int v) => v.toString().padLeft(2, '0');
 
-  void _ayToggle(int ay, bool v) {
-    final yeni = Set<int>.from(widget.secilenAylar);
-    final tumSecili = yeni.isEmpty || yeni.length == 12;
-    if (tumSecili) {
-      widget.onAylarDegisti(v ? {ay} : {});
-      return;
-    }
-    if (v) {
-      yeni.add(ay);
-      if (yeni.length == 12) {
-        widget.onAylarDegisti({});
-      } else {
-        widget.onAylarDegisti(yeni);
-      }
-    } else {
-      yeni.remove(ay);
-      widget.onAylarDegisti(yeni);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -376,31 +356,55 @@ class _FiltrePaneliState extends State<FiltrePaneli> {
   Widget _ayChiplar() {
     final tumSecili = widget.secilenAylar.isEmpty ||
         widget.secilenAylar.length == 12;
-    return Wrap(
-      spacing: 6,
-      runSpacing: 6,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FilterChip(
-          label: const Text('Tümü',
-              style: TextStyle(fontSize: 12)),
-          selected: tumSecili,
-          onSelected: (_) =>
-              widget.onAylarDegisti(tumSecili ? {} : {}),
-          selectedColor: _anaRenk.withOpacity(0.15),
-          checkmarkColor: _anaRenk,
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            FilterChip(
+              label: const Text('Tümü',
+                  style: TextStyle(fontSize: 12)),
+              selected: tumSecili,
+              onSelected: (_) => widget.onAylarDegisti({}),
+              selectedColor: _anaRenk.withOpacity(0.15),
+              checkmarkColor: _anaRenk,
+            ),
+            ...List.generate(12, (i) {
+              final ay = i + 1;
+              final secili = tumSecili || widget.secilenAylar.contains(ay);
+              return FilterChip(
+                label: Text(_aylarKisa[i],
+                    style: const TextStyle(fontSize: 12)),
+                selected: secili,
+                onSelected: (v) {
+                  if (tumSecili) {
+                    widget.onAylarDegisti({ay});
+                  } else if (v) {
+                    final yeni = Set<int>.from(widget.secilenAylar)..add(ay);
+                    widget.onAylarDegisti(yeni.length == 12 ? {} : yeni);
+                  } else {
+                    final yeni = Set<int>.from(widget.secilenAylar)..remove(ay);
+                    widget.onAylarDegisti(yeni);
+                  }
+                },
+                selectedColor: _anaRenk.withOpacity(0.15),
+                checkmarkColor: _anaRenk,
+              );
+            }),
+          ],
         ),
-        ...List.generate(12, (i) {
-          final ay = i + 1;
-          final secili = tumSecili || widget.secilenAylar.contains(ay);
-          return FilterChip(
-            label: Text(_aylarKisa[i],
-                style: const TextStyle(fontSize: 12)),
-            selected: secili,
-            onSelected: (v) => _ayToggle(ay, v),
-            selectedColor: _anaRenk.withOpacity(0.15),
-            checkmarkColor: _anaRenk,
-          );
-        }),
+        if (!tumSecili && widget.secilenAylar.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            _donemBaslik,
+            style: const TextStyle(
+                fontSize: 12,
+                color: _anaRenk,
+                fontWeight: FontWeight.w500),
+          ),
+        ],
       ],
     );
   }
