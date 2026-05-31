@@ -428,6 +428,7 @@ class ProjeksiyonWidgetState extends State<ProjeksiyonWidget>
             onBaslangicDegisti: (_) {},
             onBitisDegisti: (_) {},
             tarihAralikGoster: false,
+            tekAyModu: true,
             subeler: const {},
             secilenSubeler: const {},
             subeGoster: false,

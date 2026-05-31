@@ -20,6 +20,7 @@ class FiltrePaneli extends StatefulWidget {
   final DateTime baslangic;
   final DateTime bitis;
   final bool tarihAralikGoster;
+  final bool tekAyModu; // true = Tümü yok, tek ay seçimi (Projeksiyon)
   final ValueChanged<int> onYilDegisti;
   final ValueChanged<Set<int>> onAylarDegisti;
   final ValueChanged<String> onFiltreModu;
@@ -65,6 +66,7 @@ class FiltrePaneli extends StatefulWidget {
     required this.onBaslangicDegisti,
     required this.onBitisDegisti,
     this.tarihAralikGoster = true,
+    this.tekAyModu = false,
     this.subeler = const {},
     this.secilenSubeler = const {},
     this.subeGoster = true,
@@ -354,6 +356,29 @@ class _FiltrePaneliState extends State<FiltrePaneli> {
   }
 
   Widget _ayChiplar() {
+    if (widget.tekAyModu) {
+      // Tek ay modu — Tümü yok, sadece biri seçili
+      final secilenAy = widget.secilenAylar.isEmpty
+          ? DateTime.now().month
+          : widget.secilenAylar.first;
+      return Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: List.generate(12, (i) {
+          final ay = i + 1;
+          return ChoiceChip(
+            label: Text(_aylarKisa[i],
+                style: const TextStyle(fontSize: 12)),
+            selected: secilenAy == ay,
+            onSelected: (_) => widget.onAylarDegisti({ay}),
+            selectedColor: _anaRenk.withOpacity(0.15),
+            checkmarkColor: _anaRenk,
+          );
+        }),
+      );
+    }
+
+    // Çoklu ay modu
     final tumSecili = widget.secilenAylar.isEmpty ||
         widget.secilenAylar.length == 12;
     return Column(
