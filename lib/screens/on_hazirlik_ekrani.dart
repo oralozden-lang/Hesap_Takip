@@ -1556,11 +1556,13 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
     // Online ödemeler
     for (final o in _onlineOdemeler) {
       final ad = o['ad'] as String;
-      // MyDominos okunmamışsa 0 kullan — sadece okunmuş veri karşılaştırılsın
-      final myDomVal = _myDomOkundu && _myDominosOkunan.containsKey(ad)
+      // Önce OCR'dan okunan My Dominos verisi, yoksa manuel girilen ctrl değeri,
+      // ikisi de yoksa (ve hiç okuma yapılmadıysa) 0 kullan
+      final onlineCtrlText = (o['ctrl'] as TextEditingController).text;
+      final myDomVal = (_myDomOkundu && _myDominosOkunan.containsKey(ad))
           ? _myDominosOkunan[ad]!
-          : _myDomOkundu
-              ? _parseDouble((o['ctrl'] as TextEditingController).text)
+          : onlineCtrlText.isNotEmpty
+              ? _parseDouble(onlineCtrlText)
               : 0.0;
       tumKalemler.add({
         'tip': 'online',
@@ -2659,11 +2661,9 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
                             final mc = _myDomKiyasCtrl[pk];
                             final sagDeger = ipoy
                                 ? mdv
-                                : _myDomOkundu
-                                    ? (mc != null && mc.text.isNotEmpty
-                                        ? _parseDouble(mc.text)
-                                        : mdv)
-                                    : 0.0;
+                                : (mc != null && mc.text.isNotEmpty)
+                                    ? _parseDouble(mc.text)
+                                    : (_myDomOkundu ? mdv : 0.0);
                             final solDeger = _parseDouble(pc.text);
                             final solDoluF = pc.text.isNotEmpty;
                             final sagDoluF = ipoy ? mdv > 0 : sagDeger > 0;
