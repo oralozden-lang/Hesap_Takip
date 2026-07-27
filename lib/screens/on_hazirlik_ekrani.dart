@@ -2926,7 +2926,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
   // ── Görsel Okuma Fallback Zinciri ────────────────────────────────────────
   // 1. Gemini 3.1 Flash Lite Preview
   // 2. Gemini 2.5 Flash Lite
-  // 3. Groq (llama-4-scout-17b-16e-instruct)
+  // 3. Groq (qwen/qwen3.6-27b)
   // Başarılı olan ilk servisten sonuç döner, hepsi başarısızsa null döner
   // Dönüş: {'metin': String, 'api': String} veya null
   Future<Map<String, String>?> _gorselOkuFallback({
@@ -2971,7 +2971,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
           prompt: prompt,
           apiKey: groqApiKey,
         );
-        if (result != null) return {'metin': result, 'api': 'Groq (Llama 4)'};
+        if (result != null) return {'metin': result, 'api': 'Groq (Qwen3.6)'};
       } catch (_) {}
     }
 
@@ -3033,7 +3033,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
       }
   }
 
-  // Groq ile okuma — llama-4-scout vision
+  // Groq ile okuma — qwen3.6-27b vision (Preview)
   Future<String?> _groqOku({
     required String base64Image,
     required String mimeType,
@@ -3049,7 +3049,7 @@ class _OnHazirlikEkraniState extends State<OnHazirlikEkrani>
                 'Authorization': 'Bearer $apiKey',
               },
               body: jsonEncode({
-                'model': 'meta-llama/llama-4-scout-17b-16e-instruct',
+                'model': 'qwen/qwen3.6-27b',
                 'messages': [
                   {
                     'role': 'user',
