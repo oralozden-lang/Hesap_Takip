@@ -359,19 +359,21 @@ class _KullanicilarTabState extends State<KullanicilarTab> {
                     },
                   ),
                 ],
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Checkbox(
-                      value: yonetici,
-                      onChanged: (v) => setS(() {
-                        yonetici = v!;
-                        if (yonetici) seciliRolId = null;
-                      }),
-                    ),
-                    const Text('Yönetici (tüm şubeler)'),
-                  ],
-                ),
+                if (widget.yoneticiGirisi) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: yonetici,
+                        onChanged: (v) => setS(() {
+                          yonetici = v!;
+                          if (yonetici) seciliRolId = null;
+                        }),
+                      ),
+                      const Text('Yönetici (tüm şubeler)'),
+                    ],
+                  ),
+                ],
                 if (!yonetici) ...[
                   const SizedBox(height: 8),
                   FutureBuilder<QuerySnapshot>(
@@ -420,7 +422,7 @@ class _KullanicilarTabState extends State<KullanicilarTab> {
                     .set({
                   'parola': parolaCtrl.text.trim(),
                   'subeler': yonetici ? ['TUM'] : seciliSubeler,
-                  'yonetici': yonetici,
+                  'yonetici': yonetici && widget.yoneticiGirisi,
                   'aktif': true,
                   if (seciliRolId != null) 'rolId': seciliRolId,
                 });
