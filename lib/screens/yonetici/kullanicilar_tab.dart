@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class KullanicilarTab extends StatefulWidget {
-  const KullanicilarTab({super.key});
+  /// Yönetici hesaplarını yalnızca yönetici girişi görebilir.
+  final bool yoneticiGirisi;
+  const KullanicilarTab({super.key, this.yoneticiGirisi = false});
   @override
   State<KullanicilarTab> createState() => _KullanicilarTabState();
 }
@@ -28,6 +30,7 @@ class _KullanicilarTabState extends State<KullanicilarTab> {
           final subeler = List<String>.from(data['subeler'] ?? []);
           final yonetici = data['yonetici'] == true;
 
+          if (yonetici && !widget.yoneticiGirisi) return false;
           if (_kullaniciArama.isNotEmpty &&
               !k.id.toLowerCase().contains(_kullaniciArama.toLowerCase()))
             return false;
