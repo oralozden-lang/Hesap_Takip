@@ -121,7 +121,7 @@ class _YoneticiPaneliEkraniState extends State<YoneticiPaneliEkrani>
     }
     if (y.kullaniciEkle) {
       tabs.add(const Tab(icon: Icon(Icons.people), text: 'Kullanıcılar'));
-      tabViews.add(const KullanicilarTab());
+      tabViews.add(KullanicilarTab(yoneticiGirisi: y == KullaniciYetki.yonetici));
     }
     if (y.raporGoruntuleme) {
       tabs.add(const Tab(icon: Icon(Icons.bar_chart), text: 'Raporlar'));
